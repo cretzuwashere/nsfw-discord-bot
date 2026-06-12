@@ -6,7 +6,9 @@ export default defineConfig({
   target: 'node22',
   clean: true,
   sourcemap: true,
-  // Workspace packages are bundled; npm dependencies stay external and are
-  // installed in the runtime image.
+  // Bundle ONLY workspace code; every npm package stays external and is
+  // provided by the runtime image's node_modules (inlining CJS deps into an
+  // ESM bundle breaks with "Dynamic require of ... is not supported").
+  skipNodeModulesBundle: true,
   noExternal: [/^@botplatform\//],
 });
