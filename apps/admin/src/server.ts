@@ -21,6 +21,7 @@ import fastifyStatic from '@fastify/static';
 import view from '@fastify/view';
 import ejs from 'ejs';
 import fastify, {
+  type FastifyError,
   type FastifyInstance,
   type FastifyReply,
   type FastifyRequest,
@@ -83,7 +84,7 @@ export async function buildAdminServer(deps: AdminDeps): Promise<FastifyInstance
   // ---------------------------------------------------------------------
   // Error boundary: users see friendly pages, logs see the real error.
   // ---------------------------------------------------------------------
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
     if (statusCode >= 500) {
       logger.error({ err: error, url: request.url }, 'admin request failed');
@@ -418,7 +419,7 @@ export async function buildAdminServer(deps: AdminDeps): Promise<FastifyInstance
     const pageSize = 50;
     const [rows, total] = await Promise.all([
       auditLogs.listRecent({ limit: pageSize, offset: (page - 1) * pageSize, action }),
-      auditLogs.count(),
+      auditLogs.count({ action }),
     ]);
     return reply.view('audit-logs', {
       ...pageLocals(request, reply, 'Audit Logs'),

@@ -21,7 +21,12 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        // disallowTypeAnnotations off: vitest's importOriginal<typeof import('…')>
+        // pattern needs inline import() type annotations.
+        { prefer: 'type-imports', disallowTypeAnnotations: false },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': ['error', { allow: ['warn', 'error'] }],
     },

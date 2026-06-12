@@ -18,13 +18,15 @@ afterEach(() => {
 
 describe('createBotClient', () => {
   it('requests the status endpoint with the internal token header', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ version: '0.1.0' })));
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
+      async () => new Response(JSON.stringify({ version: '0.1.0' }))
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const status = await makeClient().getStatus();
     expect(status).toMatchObject({ version: '0.1.0' });
 
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://bot:8081/internal/status');
     expect((init.headers as Record<string, string>)[INTERNAL_TOKEN_HEADER]).toBe('token-12345');
   });
@@ -42,7 +44,9 @@ describe('createBotClient', () => {
   });
 
   it('builds the right action paths and survives failures', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, message: 'done' })));
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
+      async () => new Response(JSON.stringify({ ok: true, message: 'done' }))
+    );
     vi.stubGlobal('fetch', fetchMock);
     const client = makeClient();
 

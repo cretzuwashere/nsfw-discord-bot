@@ -28,9 +28,11 @@
     "discord:register-commands": "pnpm --filter @botplatform/bot run register-commands"
   },
   "devDependencies": {
+    "@botplatform/database": "workspace:*",
     "@eslint/js": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
+    "pg": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:",

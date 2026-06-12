@@ -3,6 +3,13 @@ packages:
   - packages/*
   - tests/e2e
 
+# pnpm 10 blocks dependency build scripts by default; these are the only
+# packages allowed to run them (native compilation / binary setup).
+onlyBuiltDependencies:
+  - '@discordjs/opus'
+  - argon2
+  - esbuild
+
 # Central version catalog — every workspace package references "catalog:".
 # Update versions here, in one place only. Pins verified 2026-06-13.
 catalog:
@@ -47,7 +54,7 @@ catalog:
   vitest: ^4.1.8
   eslint: ^10.5.0
   typescript-eslint: ^8.61.0
-  '@eslint/js': ^10.5.0
+  '@eslint/js': ^10.0.1
   prettier: ^3.8.4
   '@types/node': ^24.0.0
   '@types/ejs': ^3.1.5

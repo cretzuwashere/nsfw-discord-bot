@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('undici', () => ({
   request: vi.fn(),
-  Agent: vi.fn().mockImplementation(() => ({ close: vi.fn().mockResolvedValue(undefined) })),
+  // Must be constructable (`new Agent(...)`) — a plain function, not an arrow.
+  Agent: vi.fn(function Agent() {
+    return { close: vi.fn().mockResolvedValue(undefined) };
+  }),
 }));
 
 vi.mock('./url-validation.js', async (importOriginal) => {

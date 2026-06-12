@@ -106,11 +106,12 @@ export async function openSafeHttpStream(
       throw new UserFacingError(validation.code, validation.reason);
     }
 
+    // undici does not follow redirects by default — every hop comes back to
+    // this loop and gets re-validated.
     const agent = new Agent({
       connect: { lookup: guardedLookup, timeout: timeoutMs },
       headersTimeout: timeoutMs,
       bodyTimeout: bodyTimeoutMs,
-      maxRedirections: 0,
     });
     const closeAgent = () => {
       void agent.close().catch(() => {});

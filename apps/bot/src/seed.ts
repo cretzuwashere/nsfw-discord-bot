@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { createDatabase, seed } from '@botplatform/database';
 
 /**

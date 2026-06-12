@@ -17,7 +17,7 @@ import {
   type Interaction,
 } from 'discord.js';
 import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
-import { createDiscordVoiceSession, DiscordVoiceSession } from './voice-session.js';
+import { createDiscordVoiceSession, type DiscordVoiceSession } from './voice-session.js';
 
 /**
  * The Discord channel adapter. All Discord-specific behavior lives here;

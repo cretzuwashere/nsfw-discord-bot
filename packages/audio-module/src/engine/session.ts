@@ -171,7 +171,8 @@ export class GuildPlaybackSession {
 
     try {
       await this.voiceRef.play(track.source, (event) => this.handleEvent(event));
-      this.consecutiveFailures = 0;
+      // NOTE: the failure counter only resets when a track FINISHES
+      // successfully — merely starting must not defeat the error cutoff.
       this.armDurationTimer();
     } catch (error) {
       this.finishHistory('failed', safeErrorSummary(error));

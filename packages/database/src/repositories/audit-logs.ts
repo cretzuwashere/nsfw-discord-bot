@@ -1,4 +1,4 @@
-import { desc, eq, sql, type SQL } from 'drizzle-orm';
+import { desc, like, sql, type SQL } from 'drizzle-orm';
 import type { AuditEntry } from '@botplatform/core';
 import type { Db } from '../client.js';
 import { auditLogs } from '../schema.js';
@@ -23,9 +23,7 @@ export function createAuditLogsRepo(db: Db) {
       AuditLogRow[]
     > {
       const limit = Math.min(options.limit ?? 50, 200);
-      const where: SQL | undefined = options.action
-        ? eq(auditLogs.action, options.action)
-        : undefined;
+      const where = actionFilter(options.action);
       const query = db
         .select()
         .from(auditLogs)
@@ -35,11 +33,20 @@ export function createAuditLogsRepo(db: Db) {
       return where ? query.where(where) : query;
     },
 
-    async count(): Promise<number> {
-      const rows = await db.select({ value: sql<number>`count(*)::int` }).from(auditLogs);
+    async count(options: { action?: string } = {}): Promise<number> {
+      const where = actionFilter(options.action);
+      const base = db.select({ value: sql<number>`count(*)::int` }).from(auditLogs);
+      const rows = await (where ? base.where(where) : base);
       return rows[0]?.value ?? 0;
     },
   };
+}
+
+/** Substring match on the action key (e.g. 'admin' finds 'admin.login'). */
+function actionFilter(action: string | undefined): SQL | undefined {
+  if (!action) return undefined;
+  const escaped = action.replace(/[\\%_]/g, (char) => `\\${char}`);
+  return like(auditLogs.action, `%${escaped}%`);
 }
 
 /** Defensive: metadata must be JSON-serializable and free of obvious secrets. */
