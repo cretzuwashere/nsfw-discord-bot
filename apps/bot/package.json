@@ -1,0 +1,35 @@
+{
+  "name": "@botplatform/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "register-commands": "tsx src/register-commands.ts"
+  },
+  "dependencies": {
+    "@botplatform/audio-module": "workspace:*",
+    "@botplatform/config": "workspace:*",
+    "@botplatform/core": "workspace:*",
+    "@botplatform/database": "workspace:*",
+    "@botplatform/discord-adapter": "workspace:*",
+    "@botplatform/logger": "workspace:*",
+    "@botplatform/moderation-module": "workspace:*",
+    "@botplatform/security": "workspace:*",
+    "@botplatform/shared": "workspace:*",
+    "@discordjs/opus": "catalog:",
+    "@discordjs/voice": "catalog:",
+    "discord.js": "catalog:",
+    "fastify": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
