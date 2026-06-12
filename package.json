@@ -1,0 +1,39 @@
+{
+  "name": "botplatform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modular bot platform — Discord audio playback first, built for future moderation and multi-platform adapters.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@10.34.3",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" run dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --project unit --project integration",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "pnpm --filter @botplatform/e2e run test",
+    "playwright": "pnpm --filter @botplatform/e2e exec playwright",
+    "db:generate": "pnpm --filter @botplatform/database run generate",
+    "db:migrate": "pnpm --filter @botplatform/database run migrate",
+    "db:seed": "pnpm --filter @botplatform/database run seed",
+    "setup": "pnpm db:migrate && pnpm db:seed",
+    "discord:register-commands": "pnpm --filter @botplatform/bot run register-commands"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vitest": "catalog:"
+  }
+}

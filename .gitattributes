@@ -1,0 +1,17 @@
+# Normalize all text files to LF so files edited on Windows work inside Linux containers.
+* text=auto eol=lf
+
+# Shell scripts must always be LF or they break inside containers.
+*.sh text eol=lf
+
+# Windows-only files keep CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
