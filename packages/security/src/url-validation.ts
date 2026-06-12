@@ -22,6 +22,10 @@
  *    the connection can be pinned to the validated IPs (DNS rebinding guard).
  */
 
+import type { LookupAddress } from 'node:dns';
+import { lookup } from 'node:dns/promises';
+import ipaddr from 'ipaddr.js';
+
 export interface UrlValidationOptions {
   /** Lowercased domain allowlist; empty = any public domain. */
   allowedDomains: string[];
@@ -43,30 +47,137 @@ export type UrlValidationResult =
       reason: string;
     };
 
+const MAX_URL_LENGTH = 2048;
+const DEFAULT_DNS_TIMEOUT_MS = 5000;
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
+const BLOCKED_HOSTNAME_SUFFIXES = ['.localhost', '.local', '.internal'];
+
+const BLOCKED_REASON = 'That link points to a private or internal address.';
+const UNRESOLVED_REASON = 'That link could not be resolved.';
+
+function invalid(reason: string): UrlValidationResult {
+  return { ok: false, code: 'URL_INVALID', reason };
+}
+
+function blocked(): UrlValidationResult {
+  return { ok: false, code: 'URL_BLOCKED', reason: BLOCKED_REASON };
+}
+
+/** Lowercase, strip trailing dots, strip the brackets of IPv6 URL literals. */
+function normalizeHostname(hostname: string): string {
+  let host = hostname.trim().toLowerCase().replace(/\.+$/, '');
+  if (host.startsWith('[') && host.endsWith(']')) {
+    host = host.slice(1, -1);
+  }
+  return host;
+}
+
+async function lookupAllWithTimeout(
+  hostname: string,
+  timeoutMs: number
+): Promise<LookupAddress[]> {
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`DNS lookup timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([lookup(hostname, { all: true, verbatim: true }), timedOut]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export async function validateExternalUrl(
   rawUrl: string,
   options: UrlValidationOptions
 ): Promise<UrlValidationResult> {
-  void rawUrl;
-  void options;
-  throw new Error('not implemented — see implementation spec above');
+  if (rawUrl.length > MAX_URL_LENGTH) {
+    return invalid('That link is too long.');
+  }
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return invalid('That is not a valid link.');
+  }
+
+  if (!ALLOWED_PROTOCOLS.has(url.protocol)) {
+    return invalid('Only http and https links are supported.');
+  }
+  if (url.username !== '' || url.password !== '') {
+    return invalid('Links with embedded credentials are not allowed.');
+  }
+
+  const hostname = normalizeHostname(url.hostname);
+  if (hostname === '') {
+    return invalid('That link does not have a valid host.');
+  }
+  if (isBlockedHostname(hostname)) {
+    return blocked();
+  }
+
+  // Parse failure means "not an IP literal" — the DNS path applies instead.
+  const isIpLiteral = ipaddr.isValid(hostname);
+  if (isIpLiteral && isBlockedAddress(hostname)) {
+    return blocked();
+  }
+
+  if (!matchesAllowedDomain(hostname, options.allowedDomains)) {
+    return { ok: false, code: 'URL_UNSUPPORTED', reason: 'Links from that source are not allowed.' };
+  }
+
+  if (isIpLiteral) {
+    return { ok: true, url, resolvedAddresses: [hostname] };
+  }
+
+  let addresses: LookupAddress[];
+  try {
+    addresses = await lookupAllWithTimeout(hostname, options.dnsTimeoutMs ?? DEFAULT_DNS_TIMEOUT_MS);
+  } catch {
+    // NXDOMAIN / timeout details stay internal; the reason must be safe.
+    return invalid(UNRESOLVED_REASON);
+  }
+  if (addresses.length === 0) {
+    return invalid(UNRESOLVED_REASON);
+  }
+  if (addresses.some((entry) => isBlockedAddress(entry.address))) {
+    return blocked();
+  }
+
+  return { ok: true, url, resolvedAddresses: addresses.map((entry) => entry.address) };
 }
 
 /** True when the given IP address string belongs to a blocked (non-public) range. */
 export function isBlockedAddress(address: string): boolean {
-  void address;
-  throw new Error('not implemented — see implementation spec above');
+  try {
+    // process() collapses IPv4-mapped IPv6 (::ffff:a.b.c.d) into plain IPv4,
+    // so mapped forms of blocked ranges are classified like their IPv4 form.
+    const parsed = ipaddr.process(address);
+    // Block loopback, private, linkLocal, uniqueLocal, carrierGradeNat,
+    // unspecified, broadcast, reserved — i.e. everything not plain unicast.
+    return parsed.range() !== 'unicast';
+  } catch {
+    // Unparsable input fails closed.
+    return true;
+  }
 }
 
 /** True when the hostname itself is forbidden regardless of DNS (localhost, *.internal, …). */
 export function isBlockedHostname(hostname: string): boolean {
-  void hostname;
-  throw new Error('not implemented — see implementation spec above');
+  const host = normalizeHostname(hostname);
+  if (host === 'localhost') return true;
+  return BLOCKED_HOSTNAME_SUFFIXES.some((suffix) => host.endsWith(suffix));
 }
 
 /** True when hostname equals or is a subdomain of one of the allowed domains. */
 export function matchesAllowedDomain(hostname: string, allowedDomains: string[]): boolean {
-  void hostname;
-  void allowedDomains;
-  throw new Error('not implemented — see implementation spec above');
+  if (allowedDomains.length === 0) return true;
+  const host = normalizeHostname(hostname);
+  return allowedDomains.some((domain) => {
+    const allowed = normalizeHostname(domain);
+    return allowed !== '' && (host === allowed || host.endsWith(`.${allowed}`));
+  });
 }

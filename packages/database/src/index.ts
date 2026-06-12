@@ -10,3 +10,4 @@ export * from './repositories/moderation.js';
 export * from './repositories/modules.js';
 export * from './repositories/playback.js';
 export * from './repositories/system-settings.js';
+export * from './test-url.js';

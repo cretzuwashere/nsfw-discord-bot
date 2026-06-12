@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# Development image — the ONLY toolchain a developer needs on the host is
+# Docker Desktop. Node, pnpm, ffmpeg, psql, Playwright browsers, compilers:
+# everything lives in this Linux image.
+#
+# Used by docker-compose.yml for the `app`, `bot`, `admin` and `e2e` services.
+#
+# Base: the official Playwright image, which ships
+#   - Node 24 (matches the prod base node:24-*)
+#   - all Playwright browsers + OS deps, with PLAYWRIGHT_BROWSERS_PATH set to
+#     /ms-playwright (so browsers survive node_modules being a named volume)
+# The image tag MUST match the @playwright/test version pinned in the
+# pnpm-workspace.yaml catalog (1.60.0) or Playwright refuses to run.
+# =============================================================================
+FROM mcr.microsoft.com/playwright:v1.60.0-noble
+
+# System packages:
+#   ffmpeg            — audio transcoding for @discordjs/voice / prism-media
+#   postgresql-client — psql/pg_dump for debugging & backups from inside Docker
+#   python3 make g++  — REQUIRED: @discordjs/opus compiles from source on this
+#                       glibc (no prebuilt binary for this platform/Node combo)
+#   git               — pnpm needs it for some operations; devcontainer use
+#   curl              — compose healthchecks + manual endpoint poking
+#   ca-certificates   — TLS trust for outbound HTTPS (audio URL fetching)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    postgresql-client \
+    python3 \
+    make \
+    g++ \
+    git \
+    curl \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# Pin pnpm exactly (same as "packageManager" in package.json).
+# Deliberately NOT using corepack — it is being removed from Node and its
+# signature verification has caused breakage; a plain global install is boring
+# and reliable.
+RUN npm install -g pnpm@10.34.3
+
+# The repository is bind-mounted here by docker-compose.yml. node_modules is a
+# named volume mounted over /workspace/node_modules (hoisted layout, see
+# .npmrc) so installs stay inside Linux — fast, and no Windows symlink issues.
+WORKDIR /workspace
+
+# Keep root: the dev container works against a Windows bind mount, where
+# non-root users hit permission mismatches. The production image (Dockerfile)
+# runs as the unprivileged `node` user instead.
+
+# The image is generic; each compose service overrides the command
+# (sleep infinity for `app`, scripts/dev-entry.sh for `bot`/`admin`).
+CMD ["sleep", "infinity"]

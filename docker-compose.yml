@@ -1,0 +1,173 @@
+# =============================================================================
+# DEV compose — the default developer experience. The host needs ONLY Docker.
+#
+# First run:
+#   cp .env.example .env          (optional — every var has a dev default)
+#   docker compose up -d --build
+#   docker compose exec app pnpm install
+#   docker compose exec app pnpm db:migrate
+#   docker compose exec app pnpm db:seed
+#   → admin panel on http://localhost:3000
+#
+# The `bot` and `admin` services start immediately but WAIT (politely, in a
+# loop — see scripts/dev-entry.sh) until `pnpm install` has populated the
+# shared node_modules volume, then run the tsx watchers.
+#
+# Day-to-day commands all run inside the `app` toolbox container:
+#   docker compose exec app pnpm test
+#   docker compose exec app pnpm lint
+# (or use the optional Makefile wrappers — see Makefile.)
+# =============================================================================
+name: botplatform
+
+# --- shared blocks (YAML anchors; `app`, `bot`, `admin`, `e2e` are the same
+# --- image + mounts + env, only the command differs) --------------------------
+
+# Every variable is passed through from .env with a safe DEV default that
+# matches .env.example. Production (docker-compose.prod.yml) has NO defaults
+# for secrets — these weak values are for local development only.
+x-dev-environment: &dev-environment
+  NODE_ENV: ${NODE_ENV:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: ${DATABASE_URL:-postgres://botplatform:change_me_dev_password@db:5432/botplatform}
+  # Leave Discord vars empty to run without a Discord connection.
+  DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+  DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+  DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+  ADMIN_PORT: ${ADMIN_PORT:-3000}
+  PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:3000}
+  SESSION_SECRET: ${SESSION_SECRET:-change_me_to_a_random_string_of_at_least_32_chars}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change_me_admin_password}
+  HEALTH_PORT: ${HEALTH_PORT:-8081}
+  INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-change_me_internal_token}
+  BOT_INTERNAL_URL: ${BOT_INTERNAL_URL:-http://bot:8081}
+  ALLOWED_AUDIO_DOMAINS: ${ALLOWED_AUDIO_DOMAINS:-}
+  MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-50}
+  MAX_TRACK_DURATION_SECONDS: ${MAX_TRACK_DURATION_SECONDS:-3600}
+  AUDIO_REQUEST_TIMEOUT_MS: ${AUDIO_REQUEST_TIMEOUT_MS:-15000}
+  E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-e2e-admin@example.com}
+  E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-e2e_test_password_123}
+  PLAYWRIGHT_BASE_URL: ${PLAYWRIGHT_BASE_URL:-http://admin:3000}
+  # Integration tests get their own database on the same Postgres server.
+  TEST_DATABASE_URL: ${TEST_DATABASE_URL:-postgres://botplatform:change_me_dev_password@db:5432/botplatform_test}
+
+x-dev-volumes: &dev-volumes
+  # Source is bind-mounted from the host; edits are picked up by tsx watchers.
+  - .:/workspace
+  # node_modules lives in a NAMED VOLUME, not on the Windows bind mount:
+  # native Linux speed and no symlink/permission trouble. Shared by all four
+  # dev services — install once via `docker compose exec app pnpm install`.
+  - node_modules:/workspace/node_modules
+  # Persistent pnpm content-addressable store → re-installs are fast.
+  - pnpm-store:/root/.local/share/pnpm
+
+x-dev-build: &dev-build
+  context: .
+  dockerfile: Dockerfile.dev
+
+services:
+  # --- PostgreSQL ------------------------------------------------------------
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-botplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-botplatform}
+    volumes:
+      # postgres:18+ images moved the volume mount up to /var/lib/postgresql
+      # (NOT the old /var/lib/postgresql/data).
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-botplatform} -d ${POSTGRES_DB:-botplatform}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    # 5432 is intentionally NOT published — the host has no psql anyway; use
+    # `docker compose exec db psql -U botplatform`. Uncomment to attach a GUI
+    # client from the host:
+    # ports:
+    #   - '5432:5432'
+
+  # --- app: long-lived "toolbox" container for pnpm/test/lint commands --------
+  app:
+    build: *dev-build
+    image: botplatform-dev
+    command: ['sleep', 'infinity']
+    working_dir: /workspace
+    volumes: *dev-volumes
+    environment: *dev-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+  # --- bot: Discord worker (tsx watch via scripts/dev-entry.sh) ---------------
+  bot:
+    image: botplatform-dev
+    build: *dev-build
+    command: ['bash', 'scripts/dev-entry.sh', 'bot']
+    working_dir: /workspace
+    volumes: *dev-volumes
+    environment: *dev-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:${HEALTH_PORT:-8081}/healthz || exit 1']
+      interval: 15s
+      timeout: 5s
+      # Generous: on first boot the service idles until `pnpm install` is done.
+      start_period: 90s
+      retries: 10
+    init: true
+    restart: unless-stopped
+    # No published ports — the internal API (8081) is Docker-network only.
+
+  # --- admin: server-rendered admin panel --------------------------------------
+  admin:
+    image: botplatform-dev
+    build: *dev-build
+    command: ['bash', 'scripts/dev-entry.sh', 'admin']
+    working_dir: /workspace
+    volumes: *dev-volumes
+    environment: *dev-environment
+    ports:
+      # Container listens on ADMIN_PORT (default 3000); publish the same number
+      # on the host to keep PUBLIC_ADMIN_URL=http://localhost:3000 working.
+      - '${ADMIN_PORT:-3000}:${ADMIN_PORT:-3000}'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:${ADMIN_PORT:-3000}/healthz || exit 1']
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 10
+    init: true
+    restart: unless-stopped
+
+  # --- e2e: Playwright runner (opt-in profile) ---------------------------------
+  # Run with:  docker compose --profile e2e run --rm e2e
+  # Browsers ship in the dev image (PLAYWRIGHT_BROWSERS_PATH=/ms-playwright).
+  e2e:
+    profiles: ['e2e']
+    image: botplatform-dev
+    build: *dev-build
+    command: ['bash', '-lc', 'pnpm test:e2e']
+    working_dir: /workspace
+    volumes: *dev-volumes
+    environment: *dev-environment
+    depends_on:
+      admin:
+        condition: service_healthy
+    init: true
+
+volumes:
+  pgdata:
+  node_modules:
+  pnpm-store:

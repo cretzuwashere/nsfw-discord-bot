@@ -1,0 +1,133 @@
+# =============================================================================
+# PROD compose — STANDALONE file. Run it with -f (do NOT merge with the dev
+# docker-compose.yml):
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+#
+# SECRETS FAIL LOUDLY ON PURPOSE: SESSION_SECRET, INTERNAL_API_TOKEN,
+# POSTGRES_PASSWORD and DATABASE_URL use the ${VAR:?message} required-variable
+# syntax — compose refuses to start until real values are provided via .env or
+# the environment. There are NO development fallbacks in this file.
+#
+# Startup order: db (healthy) → migrate (one-shot, applies Drizzle migrations)
+# → bot + admin (wait for migrate to complete successfully).
+# =============================================================================
+name: botplatform-prod
+
+# Full runtime environment shared by migrate/seed/bot/admin. Config validation
+# (packages/config) requires SESSION_SECRET + INTERNAL_API_TOKEN in every app.
+x-app-environment: &app-environment
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required, e.g. postgres://botplatform:<password>@db:5432/botplatform}
+  DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+  DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+  DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+  ADMIN_PORT: ${ADMIN_PORT:-3000}
+  PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:3000}
+  SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required - at least 32 random characters}
+  # Secure cookies by default in production; set COOKIE_SECURE=false only for
+  # plain-HTTP trials (logins will not work over HTTP otherwise).
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  HEALTH_PORT: ${HEALTH_PORT:-8081}
+  INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required - a long random shared secret}
+  BOT_INTERNAL_URL: ${BOT_INTERNAL_URL:-http://bot:8081}
+  ALLOWED_AUDIO_DOMAINS: ${ALLOWED_AUDIO_DOMAINS:-}
+  MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-50}
+  MAX_TRACK_DURATION_SECONDS: ${MAX_TRACK_DURATION_SECONDS:-3600}
+  AUDIO_REQUEST_TIMEOUT_MS: ${AUDIO_REQUEST_TIMEOUT_MS:-15000}
+
+services:
+  # --- PostgreSQL ------------------------------------------------------------
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-botplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production}
+      POSTGRES_DB: ${POSTGRES_DB:-botplatform}
+    volumes:
+      # postgres:18+ images mount the volume at /var/lib/postgresql
+      # (NOT the pre-18 /var/lib/postgresql/data).
+      - pgdata-prod:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-botplatform} -d ${POSTGRES_DB:-botplatform}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+    # Never published to the outside world; bot/admin reach it via the
+    # compose-internal network.
+
+  # --- migrate: one-shot, runs Drizzle migrations then exits -------------------
+  # Reuses the bot image, which carries dist/migrate.js + /app/migrations.
+  migrate:
+    build:
+      context: .
+      target: bot
+    image: botplatform-bot
+    command: ['node', 'dist/migrate.js']
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  # --- seed: opt-in one-shot bootstrap of the first admin user -----------------
+  #   docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+  # Set ADMIN_EMAIL/ADMIN_PASSWORD in the environment for the run; without them
+  # the seeder has nothing to create.
+  seed:
+    profiles: ['seed']
+    image: botplatform-bot
+    build:
+      context: .
+      target: bot
+    command: ['node', 'dist/seed.js']
+    environment:
+      <<: *app-environment
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-}
+      E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  # --- bot: Discord worker ------------------------------------------------------
+  bot:
+    build:
+      context: .
+      target: bot
+    image: botplatform-bot
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+    # No published ports — the internal API (HEALTH_PORT) stays on the Docker
+    # network; only the admin panel talks to it.
+
+  # --- admin: admin panel ---------------------------------------------------------
+  admin:
+    build:
+      context: .
+      target: admin
+    image: botplatform-admin
+    environment: *app-environment
+    ports:
+      - '${ADMIN_PORT:-3000}:${ADMIN_PORT:-3000}'
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+
+volumes:
+  pgdata-prod:

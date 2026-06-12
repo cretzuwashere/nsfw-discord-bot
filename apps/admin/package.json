@@ -1,0 +1,37 @@
+{
+  "name": "@botplatform/admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@botplatform/config": "workspace:*",
+    "@botplatform/core": "workspace:*",
+    "@botplatform/database": "workspace:*",
+    "@botplatform/logger": "workspace:*",
+    "@botplatform/security": "workspace:*",
+    "@botplatform/shared": "workspace:*",
+    "@fastify/csrf-protection": "catalog:",
+    "@fastify/formbody": "catalog:",
+    "@fastify/rate-limit": "catalog:",
+    "@fastify/secure-session": "catalog:",
+    "@fastify/sensible": "catalog:",
+    "@fastify/static": "catalog:",
+    "@fastify/view": "catalog:",
+    "ejs": "catalog:",
+    "fastify": "catalog:"
+  },
+  "devDependencies": {
+    "@types/ejs": "catalog:",
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

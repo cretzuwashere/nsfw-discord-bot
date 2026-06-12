@@ -1,0 +1,108 @@
+# CI mirrors the local workflow exactly: everything runs through Docker
+# Compose on the Linux runner — no Node.js toolchain on the runner itself.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create env file from example
+        run: cp .env.example .env
+
+      - name: Build dev image
+        run: docker compose build --progress=plain app
+
+      - name: Start database and dev container
+        run: docker compose up -d db app
+
+      - name: Install dependencies
+        run: docker compose exec -T app pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: docker compose exec -T app pnpm lint
+
+      - name: Typecheck
+        run: docker compose exec -T app pnpm typecheck
+
+      - name: Unit tests
+        run: docker compose exec -T app pnpm test:unit
+
+      - name: Migrate database
+        run: docker compose exec -T app pnpm db:migrate
+
+      - name: Integration tests
+        run: docker compose exec -T app pnpm test:integration
+
+      - name: Seed database
+        run: docker compose exec -T app pnpm db:seed
+
+      - name: Build
+        run: docker compose exec -T app pnpm build
+
+      - name: Start bot and admin services
+        run: docker compose up -d bot admin
+
+      - name: Wait for admin to become healthy
+        run: |
+          if ! docker compose exec -T app bash -c 'for i in $(seq 1 60); do curl -fsS http://admin:3000/healthz >/dev/null && exit 0; sleep 2; done; echo "admin never became healthy"; exit 1'; then
+            docker compose logs admin
+            exit 1
+          fi
+
+      - name: E2E tests (Playwright)
+        run: docker compose exec -T app pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          if-no-files-found: ignore
+
+      - name: Logs and teardown
+        if: always()
+        run: |
+          docker compose logs --tail 100
+          docker compose down -v
+
+  docker-prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build bot production image
+        run: docker build --target bot -t botplatform-bot .
+
+      - name: Build admin production image
+        run: docker build --target admin -t botplatform-admin .
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks can scan every commit, not just HEAD.
+          fetch-depth: 0
+
+      # GITLEAKS_LICENSE is only needed for organization-owned repos;
+      # personal repos work with just GITHUB_TOKEN.
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
