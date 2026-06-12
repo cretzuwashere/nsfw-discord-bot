@@ -1,0 +1,32 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1><%= guild.name || guild.externalId %></h1>
+<p class="muted">Adapter: <%= guild.adapterKey %> · External ID: <code><%= guild.externalId %></code></p>
+
+<% if (saved) { %><div class="alert alert-ok" role="status">Settings saved.</div><% } %>
+<% for (const error of errors) { %>
+  <div class="alert alert-error" role="alert"><%= error %></div>
+<% } %>
+
+<section class="card">
+  <form method="post" action="/guilds/<%= guild.id %>/settings">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <label for="allowedAudioDomains">Allowed audio domains (one per line or comma-separated; empty = inherit global setting)</label>
+    <textarea id="allowedAudioDomains" name="allowedAudioDomains" rows="4"
+      placeholder="example.com&#10;cdn.example.com"><%= guild.settings?.allowedAudioDomains?.join('\n') ?? '' %></textarea>
+
+    <label for="maxQueueSize">Max queue size (blank = inherit global default of <%= globalDefaults.maxQueueSize %>)</label>
+    <input id="maxQueueSize" name="maxQueueSize" type="number" min="1" max="1000"
+      value="<%= guild.settings?.maxQueueSize ?? '' %>">
+
+    <label for="maxTrackDurationSeconds">Max track duration in seconds (blank = inherit global default of <%= globalDefaults.maxTrackDurationSeconds %>)</label>
+    <input id="maxTrackDurationSeconds" name="maxTrackDurationSeconds" type="number" min="1" max="86400"
+      value="<%= guild.settings?.maxTrackDurationSeconds ?? '' %>">
+
+    <button type="submit" class="btn btn-primary">Save settings</button>
+    <a class="btn btn-ghost" href="/guilds">Back</a>
+  </form>
+  <p class="muted small">Note: per-guild overrides are stored now and applied by the audio engine in a future iteration; the global limits apply today. See docs/ASSUMPTIONS.md.</p>
+</section>
+<%- include('partials/footer') %>

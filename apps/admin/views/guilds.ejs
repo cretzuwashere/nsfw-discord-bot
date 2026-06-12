@@ -1,0 +1,27 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Guild Settings</h1>
+<section class="card">
+  <% if (guilds.length === 0) { %>
+    <p class="muted">No servers seen yet — the bot records servers when it connects to Discord.
+    Invite the bot to a server and this list fills in automatically.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Server</th><th>External ID</th><th>Adapter</th><th>Queue limit</th><th>Max duration</th><th>Allowed domains</th><th></th></tr></thead>
+      <tbody>
+        <% for (const guild of guilds) { %>
+          <tr>
+            <td><strong><%= guild.name || '(unnamed)' %></strong></td>
+            <td><code><%= guild.externalId %></code></td>
+            <td><%= guild.adapterKey %></td>
+            <td><%= guild.settings?.maxQueueSize ?? 'inherit' %></td>
+            <td><%= guild.settings?.maxTrackDurationSeconds ?? 'inherit' %></td>
+            <td class="muted small"><%= guild.settings?.allowedAudioDomains?.length ? guild.settings.allowedAudioDomains.join(', ') : 'inherit' %></td>
+            <td><a class="btn btn-ghost" href="/guilds/<%= guild.id %>">Edit</a></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

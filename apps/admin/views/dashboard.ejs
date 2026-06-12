@@ -1,0 +1,72 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Dashboard</h1>
+
+<div class="grid">
+  <section class="card">
+    <h2>Bot status</h2>
+    <% if (botStatus) { %>
+      <table>
+        <tbody>
+          <tr><th>Uptime</th><td><%= Math.floor(botStatus.uptimeSeconds / 60) %> min</td></tr>
+          <tr><th>Version</th><td><%= botStatus.version %></td></tr>
+          <tr><th>Environment</th><td><%= botStatus.environment %></td></tr>
+        </tbody>
+      </table>
+      <h3>Adapters</h3>
+      <ul class="statuslist">
+        <% for (const adapter of botStatus.adapters) { %>
+          <li>
+            <span class="adapter-name"><%= adapter.key === 'discord' ? 'Discord' : adapter.key %></span>
+            <span class="badge badge-<%= adapter.state === 'connected' ? 'ok' : adapter.state === 'error' ? 'error' : 'muted' %>"><%= adapter.state %></span>
+            <% if (adapter.identity) { %><span class="muted">as <%= adapter.identity %></span><% } %>
+            <% if (adapter.guildCount !== undefined) { %><span class="muted">· <%= adapter.guildCount %> server(s)</span><% } %>
+            <% if (adapter.detail) { %><div class="muted small"><%= adapter.detail %></div><% } %>
+          </li>
+        <% } %>
+      </ul>
+      <p class="muted small">Audio sessions active: <%= botStatus.audio.sessions.length %></p>
+    <% } else { %>
+      <p>Discord bot worker: <span class="badge badge-error">unreachable</span></p>
+      <p class="muted">The bot container may be starting or stopped. Check <code>docker compose logs bot</code>.</p>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>Platform health</h2>
+    <ul class="statuslist">
+      <li>Database <span class="badge badge-<%= databaseOk ? 'ok' : 'error' %>"><%= databaseOk ? 'OK' : 'error' %></span></li>
+      <li>Environment <span class="badge badge-muted"><%= environment %></span></li>
+      <li>Version <span class="badge badge-muted"><%= version %></span></li>
+    </ul>
+    <h2>Active modules</h2>
+    <ul class="statuslist">
+      <% for (const moduleRow of modules) { %>
+        <li><%= moduleRow.name %> <span class="badge badge-<%= moduleRow.enabled ? 'ok' : 'muted' %>"><%= moduleRow.enabled ? 'Enabled' : 'Disabled' %></span></li>
+      <% } %>
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Recent audit logs</h2>
+  <% if (recentAudit.length === 0) { %>
+    <p class="muted">No audit entries yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
+      <tbody>
+        <% for (const row of recentAudit) { %>
+          <tr>
+            <td class="nowrap"><%= row.createdAt.toISOString().replace('T', ' ').slice(0, 19) %></td>
+            <td><%= row.actorType %><% if (row.actorId) { %> <span class="muted small"><%= row.actorId %></span><% } %></td>
+            <td><code><%= row.action %></code></td>
+            <td><%= row.targetType ? `${row.targetType}:${row.targetId ?? ''}` : '—' %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+  <p><a href="/audit-logs">View all audit logs →</a></p>
+</section>
+<%- include('partials/footer') %>

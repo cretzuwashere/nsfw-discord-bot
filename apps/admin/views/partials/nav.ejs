@@ -1,0 +1,27 @@
+<header class="topbar">
+  <div class="brand">Bot Platform</div>
+  <nav class="mainnav">
+    <% const links = [
+      ['/dashboard', 'Dashboard'],
+      ['/modules', 'Modules'],
+      ['/audio', 'Audio Player'],
+      ['/guilds', 'Guild Settings'],
+      ['/moderation', 'Moderation'],
+      ['/audit-logs', 'Audit Logs'],
+      ['/settings', 'System Settings'],
+    ]; %>
+    <% for (const [href, label] of links) { %>
+      <a href="<%= href %>" class="<%= currentPath === href ? 'active' : '' %>"><%= label %></a>
+    <% } %>
+  </nav>
+  <div class="usermenu">
+    <% if (adminEmail) { %>
+      <span class="useremail"><%= adminEmail %></span>
+      <form method="post" action="/logout" class="inline-form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-ghost">Log out</button>
+      </form>
+    <% } %>
+  </div>
+</header>
+<main class="content">

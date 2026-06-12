@@ -1,0 +1,32 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Modules</h1>
+<% if (saved) { %><div class="alert alert-ok" role="status">Saved.</div><% } %>
+<section class="card">
+  <table>
+    <thead>
+      <tr><th>Module</th><th>Key</th><th>Description</th><th>Status</th><th>Updated</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% for (const moduleRow of modules) { %>
+        <tr>
+          <td><strong><%= moduleRow.name %></strong></td>
+          <td><code><%= moduleRow.key %></code></td>
+          <td class="muted"><%= moduleRow.description %></td>
+          <td><span class="badge badge-<%= moduleRow.enabled ? 'ok' : 'muted' %>"><%= moduleRow.enabled ? 'Enabled' : 'Disabled' %></span></td>
+          <td class="nowrap muted small"><%= moduleRow.updatedAt.toISOString().slice(0, 16).replace('T', ' ') %></td>
+          <td>
+            <form method="post" action="/modules/<%= encodeURIComponent(moduleRow.key) %>/toggle" class="inline-form">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn <%= moduleRow.enabled ? 'btn-warn' : 'btn-primary' %>">
+                <%= moduleRow.enabled ? 'Disable' : 'Enable' %>
+              </button>
+            </form>
+          </td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <p class="muted small">Module state is stored in the database; the bot picks up changes within ~10 seconds.</p>
+</section>
+<%- include('partials/footer') %>

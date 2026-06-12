@@ -1,0 +1,93 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Moderation</h1>
+
+<section class="card">
+  <h2>Module status</h2>
+  <% if (moduleRow) { %>
+    <p><%= moduleRow.name %>
+      <span class="badge badge-<%= moduleRow.enabled ? 'ok' : 'muted' %>"><%= moduleRow.enabled ? 'Enabled' : 'Disabled' %></span>
+    </p>
+    <p class="muted"><%= moduleRow.description %></p>
+  <% } else { %>
+    <p class="muted">The moderation module has not been registered yet — run <code>docker compose exec app pnpm db:seed</code>.</p>
+  <% } %>
+  <p class="muted small">This is the moderation foundation: warnings, action records, rules and permission
+  mappings are persisted and ready; slash commands (warn/mute/kick/ban/…) arrive in later phases.
+  See <code>docs/MODERATION_ROADMAP.md</code>.</p>
+</section>
+
+<div class="grid">
+  <section class="card">
+    <h2>Warnings</h2>
+    <% if (warnings.length === 0) { %>
+      <p class="muted">No warnings recorded.</p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Time</th><th>User</th><th>Moderator</th><th>Reason</th><th>Status</th></tr></thead>
+        <tbody>
+          <% for (const warning of warnings) { %>
+            <tr>
+              <td class="nowrap"><%= warning.createdAt.toISOString().slice(0, 16).replace('T', ' ') %></td>
+              <td><code><%= warning.userId %></code></td>
+              <td><%= warning.moderatorId || '—' %></td>
+              <td><%= warning.reason %></td>
+              <td><%= warning.revokedAt ? 'revoked' : 'active' %></td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>Moderation actions</h2>
+    <% if (actions.length === 0) { %>
+      <p class="muted">No moderation actions recorded.</p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Time</th><th>Action</th><th>User</th><th>Moderator</th><th>Reason</th></tr></thead>
+        <tbody>
+          <% for (const action of actions) { %>
+            <tr>
+              <td class="nowrap"><%= action.createdAt.toISOString().slice(0, 16).replace('T', ' ') %></td>
+              <td><code><%= action.actionType %></code></td>
+              <td><code><%= action.userId ?? '—' %></code></td>
+              <td><%= action.moderatorId || '—' %></td>
+              <td><%= action.reason %></td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    <% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Rules</h2>
+  <% if (rules.length === 0) { %>
+    <p class="muted">No rules configured yet. Rule types planned: forbidden words, link filtering,
+    spam protection, raid protection — see the moderation roadmap.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Rule</th><th>Type</th><th>Scope</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% for (const rule of rules) { %>
+          <tr>
+            <td><strong><%= rule.name %></strong></td>
+            <td><code><%= rule.ruleType %></code></td>
+            <td><%= rule.guildId ?? 'all servers' %></td>
+            <td><span class="badge badge-<%= rule.enabled ? 'ok' : 'muted' %>"><%= rule.enabled ? 'Enabled' : 'Disabled' %></span></td>
+            <td>
+              <form method="post" action="/moderation/rules/<%= rule.id %>/toggle" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn <%= rule.enabled ? 'btn-warn' : 'btn-primary' %>"><%= rule.enabled ? 'Disable' : 'Enable' %></button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

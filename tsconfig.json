@@ -6,6 +6,7 @@
     "packages/*/src/**/*.ts",
     "packages/*/tests/**/*.ts",
     "tests/e2e/**/*.ts",
+    "tests/integration-setup/**/*.ts",
     "vitest.config.ts",
     "eslint.config.js"
   ],

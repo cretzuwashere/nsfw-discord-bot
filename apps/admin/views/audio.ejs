@@ -1,0 +1,100 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Audio Player</h1>
+<% if (message) { %><div class="alert alert-ok" role="status"><%= message %></div><% } %>
+
+<div class="grid">
+  <section class="card">
+    <h2>Configured limits</h2>
+    <table>
+      <tbody>
+        <tr><th>Queue limit</th><td><%= limits.maxQueueSize %> tracks</td></tr>
+        <tr><th>Max track duration</th><td><%= limits.maxTrackDurationSeconds %> seconds</td></tr>
+        <tr><th>Allowed audio domains</th><td><%= limits.allowedDomains.length ? limits.allowedDomains.join(', ') : 'any public domain' %></td></tr>
+        <tr><th>Request timeout</th><td><%= limits.requestTimeoutMs %> ms</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Live sessions</h2>
+    <% if (!botOnline) { %>
+      <p>Bot worker <span class="badge badge-error">unreachable</span> — no live session data.</p>
+    <% } else if (sessions.length === 0) { %>
+      <p class="muted">No active sessions — nothing is playing right now.</p>
+    <% } else { %>
+      <% for (const session of sessions) { %>
+        <div class="session">
+          <h3>Server <%= session.guildId %><% if (session.channelName) { %> · #<%= session.channelName %><% } %></h3>
+          <p>Status: <span class="badge badge-<%= session.status === 'playing' ? 'ok' : 'muted' %>"><%= session.status %></span></p>
+          <% if (session.nowPlaying) { %>
+            <p>Now playing: <strong><%= session.nowPlaying.title %></strong>
+              <% if (session.nowPlaying.requestedBy) { %><span class="muted">(requested by <%= session.nowPlaying.requestedBy %>)</span><% } %>
+            </p>
+          <% } %>
+          <p class="muted small">Queue: <%= session.queue.length %> / <%= session.maxQueueSize %></p>
+          <% if (session.queue.length > 0) { %>
+            <ol class="queue-list">
+              <% for (const track of session.queue.slice(0, 10)) { %>
+                <li><%= track.title %></li>
+              <% } %>
+            </ol>
+            <% if (session.queue.length > 10) { %><p class="muted small">…and <%= session.queue.length - 10 %> more.</p><% } %>
+          <% } %>
+          <div class="actions">
+            <% for (const [action, label] of [['skip', 'Skip current track'], ['stop', 'Stop playback'], ['clear-queue', 'Clear queue']]) { %>
+              <form method="post" action="/audio/<%= encodeURIComponent(session.guildId) %>/<%= action %>" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-warn"><%= label %></button>
+              </form>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+    <% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Recent playback errors</h2>
+  <% if (recentErrors.length === 0) { %>
+    <p class="muted">No playback errors recorded.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Time</th><th>Server</th><th>Track</th><th>Error</th></tr></thead>
+      <tbody>
+        <% for (const row of recentErrors) { %>
+          <tr>
+            <td class="nowrap"><%= row.startedAt.toISOString().slice(0, 16).replace('T', ' ') %></td>
+            <td><%= row.guildExternalId %></td>
+            <td><%= row.title || row.url %></td>
+            <td class="muted"><%= row.errorMessage %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Recent playback history</h2>
+  <% if (recentHistory.length === 0) { %>
+    <p class="muted">Nothing has been played yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Time</th><th>Server</th><th>Track</th><th>Requested by</th><th>Status</th></tr></thead>
+      <tbody>
+        <% for (const row of recentHistory) { %>
+          <tr>
+            <td class="nowrap"><%= row.startedAt.toISOString().slice(0, 16).replace('T', ' ') %></td>
+            <td><%= row.guildExternalId %></td>
+            <td><%= row.title || row.url %></td>
+            <td><%= row.requestedBy || '—' %></td>
+            <td><span class="badge badge-<%= row.status === 'completed' || row.status === 'playing' ? 'ok' : row.status === 'failed' ? 'error' : 'muted' %>"><%= row.status %></span></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

@@ -1,0 +1,32 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>System Settings</h1>
+
+<div class="grid">
+  <section class="card">
+    <h2>Configuration</h2>
+    <table>
+      <tbody>
+        <% for (const entry of safeConfig) { %>
+          <tr><th><%= entry.label %></th><td><%= entry.value %></td></tr>
+        <% } %>
+      </tbody>
+    </table>
+    <p class="muted small">Values are read-only here and configured through environment variables
+    (<code>.env</code> + Docker Compose). Secrets are never displayed.</p>
+  </section>
+
+  <section class="card">
+    <h2>Environment readiness</h2>
+    <ul class="statuslist">
+      <% for (const item of readiness) { %>
+        <li><%= item.label %> <span class="badge badge-<%= item.ok ? 'ok' : 'warn' %>"><%= item.ok ? 'yes' : 'no' %></span></li>
+      <% } %>
+    </ul>
+    <h2>Deployment</h2>
+    <p class="muted small">Running via Docker Compose. Logs: <code>docker compose logs -f admin bot</code> ·
+    Update: <code>git pull && docker compose up -d --build</code> ·
+    Backups: see <code>docs/DOCKER_DEPLOYMENT.md</code>.</p>
+  </section>
+</div>
+<%- include('partials/footer') %>

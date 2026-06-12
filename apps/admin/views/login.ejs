@@ -1,0 +1,21 @@
+<%- include('partials/head') %>
+<main class="login-wrap">
+  <section class="card login-card">
+    <h1>Bot Platform Admin</h1>
+    <p class="muted">Log in to manage your bot.</p>
+    <% if (error) { %>
+      <div class="alert alert-error" role="alert"><%= error %></div>
+    <% } %>
+    <form method="post" action="/login">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit" class="btn btn-primary">Log in</button>
+    </form>
+  </section>
+</main>
+<footer class="footer">Bot Platform</footer>
+</body>
+</html>
