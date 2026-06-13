@@ -1,0 +1,39 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Commands</h1>
+<p class="muted">All <%= totalCommands %> slash commands, grouped by module. Type <code>/</code> in any
+channel the bot can see to use them. Register/refresh them after configuring Discord with
+<code>docker compose exec app pnpm discord:register-commands</code>.</p>
+
+<% for (const module of modules) { %>
+  <section class="card">
+    <h2><%= module.name %> <span class="muted small">(<code><%= module.key %></code>)</span></h2>
+    <% if (module.commands.length === 0) { %>
+      <p class="muted"><%= module.note %></p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Command</th><th>What it does</th><th>Options</th><th>Needs permission</th></tr></thead>
+        <tbody>
+          <% for (const cmd of module.commands) { %>
+            <tr>
+              <td class="nowrap"><code><%= cmd.usage %></code></td>
+              <td><%= cmd.description %></td>
+              <td class="muted small">
+                <% if (cmd.options && cmd.options.length) { %>
+                  <ul style="margin:0;padding-left:1rem">
+                    <% for (const opt of cmd.options) { %><li><%= opt %></li><% } %>
+                  </ul>
+                <% } else { %>—<% } %>
+              </td>
+              <td class="nowrap"><% if (cmd.requiresPermission) { %><span class="badge badge-warn"><%= cmd.requiresPermission %></span><% } else { %><span class="muted small">anyone</span><% } %></td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+      <% if (module.key === 'automod' && !messageContentEnabled) { %>
+        <p class="muted small">⚠️ Content rules need the Message Content intent (DISCORD_ENABLE_MESSAGE_CONTENT).</p>
+      <% } %>
+    <% } %>
+  </section>
+<% } %>
+<%- include('partials/footer') %>

@@ -1,6 +1,12 @@
-import type { CommandContext, CommandDefinition, VoiceCapability } from '@botplatform/core';
-import { formatDuration, truncate, UserFacingError } from '@botplatform/shared';
+import type {
+  CommandContext,
+  CommandDefinition,
+  ComponentInteractionEvent,
+  VoiceCapability,
+} from '@botplatform/core';
+import { formatDuration, truncate, UserFacingError, type InternalActionResult } from '@botplatform/shared';
 import type { PlayerManager } from './engine/manager.js';
+import { buildNowPlayingPanel, parseAudioButton } from './now-playing.js';
 import type { AudioResolver } from './resolver/resolver.js';
 import type { ResolveContext } from './resolver/types.js';
 
@@ -113,7 +119,12 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
       const result = await session.enqueueOrPlay(track);
       const title = truncate(track.metadata.title, 120);
       if (result.status === 'playing') {
-        await ctx.reply(`Now playing: **${title}**`);
+        // Show the visual control panel right away when playback starts.
+        if (ctx.replyRich) {
+          await ctx.replyRich(buildNowPlayingPanel(session.getSnapshot()));
+        } else {
+          await ctx.reply(`Now playing: **${title}**`);
+        }
       } else {
         await ctx.reply(`Queued (#${result.position}): **${title}**`);
       }
@@ -215,27 +226,96 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
     },
   };
 
+  /** Render the visual now-playing panel for this guild (idle-safe). */
+  function panelFor(guildId: string) {
+    return buildNowPlayingPanel(manager.get(guildId)?.getSnapshot());
+  }
+
   const nowplaying: CommandDefinition = {
     name: 'nowplaying',
-    description: 'Show the current track',
+    description: 'Show the current track with a visual progress bar',
     guildOnly: true,
     async execute(ctx) {
-      const session = manager.get(requireGuildId(ctx));
-      const snapshot = session?.getSnapshot();
+      const guildId = requireGuildId(ctx);
+      const snapshot = manager.get(guildId)?.getSnapshot();
+      if (ctx.replyRich) {
+        await ctx.replyRich(panelFor(guildId));
+        return;
+      }
+      // Plain-text fallback for adapters without rich replies.
       if (!snapshot?.nowPlaying) {
         await ctx.reply('Nothing is playing right now.');
         return;
       }
       const track = snapshot.nowPlaying;
-      const lines = [
-        `**${truncate(track.title, 120)}**`,
-        `Status: ${snapshot.status === 'paused' ? 'paused' : 'playing'}`,
-        `Source: ${track.provider} — ${truncate(track.url, 200)}`,
-      ];
-      if (track.requestedBy) lines.push(`Requested by: ${track.requestedBy}`);
-      await ctx.reply(lines.join('\n'));
+      await ctx.reply(
+        `**${truncate(track.title, 120)}** — ${snapshot.status === 'paused' ? 'paused' : 'playing'}\n` +
+          `Source: ${track.provider} · ${truncate(track.url, 200)}`
+      );
     },
   };
 
-  return [join, leave, play, queue, skip, pause, resume, stop, nowplaying];
+  const controls: CommandDefinition = {
+    name: 'controls',
+    description: 'Show the audio player controls and live status',
+    guildOnly: true,
+    async execute(ctx) {
+      const guildId = requireGuildId(ctx);
+      if (ctx.replyRich) {
+        await ctx.replyRich(panelFor(guildId));
+        return;
+      }
+      await ctx.reply(
+        'Controls: `/pause` `/resume` `/skip` `/stop` `/leave` · `/nowplaying` for status.'
+      );
+    },
+  };
+
+  return [join, leave, play, queue, skip, pause, resume, stop, nowplaying, controls];
+}
+
+/**
+ * Handles the audio control buttons (⏸/▶/⏭/⏹/👋/🔄) emitted by the
+ * now-playing panel. Performs the action via the manager, then refreshes the
+ * panel in place (or replies with the result when in-place edit is unavailable).
+ */
+export function buildAudioComponentHandler(
+  manager: PlayerManager
+): (event: ComponentInteractionEvent) => Promise<void> {
+  return async (event) => {
+    const control = parseAudioButton(event.customId);
+    if (!control) return; // not an audio button — ignore
+    const guildId = event.guild?.externalId;
+    if (!guildId) return;
+
+    let result: InternalActionResult = { ok: true, message: 'Refreshed.' };
+    switch (control) {
+      case 'pause':
+        result = manager.pause(guildId);
+        break;
+      case 'resume':
+        result = manager.resume(guildId);
+        break;
+      case 'skip':
+        result = await manager.skip(guildId);
+        break;
+      case 'stop':
+        result = await manager.stop(guildId);
+        break;
+      case 'leave': {
+        const left = await manager.destroySession(guildId);
+        result = { ok: left, message: left ? 'Left the voice channel.' : "I'm not in a voice channel." };
+        break;
+      }
+      case 'refresh':
+        break;
+    }
+
+    const panel = buildNowPlayingPanel(manager.get(guildId)?.getSnapshot());
+    if (event.update) {
+      await event.update(panel);
+    } else {
+      await event.reply(result.message || 'Done.');
+    }
+  };
 }

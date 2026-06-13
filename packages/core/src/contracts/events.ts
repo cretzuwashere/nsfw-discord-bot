@@ -4,6 +4,8 @@
  * Slack/Telegram adapter emits the same shapes.
  */
 
+import type { OutgoingMessage } from './guild-service.js';
+
 export interface PlatformGuildRef {
   /** Internal guild UUID if resolved, else null. */
   id: string | null;
@@ -67,6 +69,12 @@ export interface ComponentInteractionEvent {
   userRoleIds: string[];
   /** Acknowledge with an ephemeral reply. Idempotent. */
   reply(content: string): Promise<void>;
+  /**
+   * Edit the message that carried this component in place (e.g. refresh a
+   * now-playing panel after a control button). Optional — adapters that don't
+   * support it omit it. Acknowledges the interaction.
+   */
+  update?(message: OutgoingMessage): Promise<void>;
 }
 
 export type PlatformEvent =

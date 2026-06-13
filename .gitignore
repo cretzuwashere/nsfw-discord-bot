@@ -30,3 +30,6 @@ Thumbs.db
 
 # Docker local overrides
 docker-compose.local.yml
+
+# Local secrets (e.g. exported YouTube cookies for private-video playback)
+secrets/

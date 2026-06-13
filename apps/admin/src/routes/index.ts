@@ -3,6 +3,7 @@ import { registerAnnouncementRoutes } from './announcements.js';
 import { registerAutomodRoutes } from './automod.js';
 import { registerBirthdayRoutes } from './birthdays.js';
 import { registerCardsRoutes } from './cards.js';
+import { registerCommandsRoutes } from './commands.js';
 import { registerCustomCommandRoutes } from './custom-commands.js';
 import { registerPlaceholderRoutes } from './placeholders.js';
 import { registerRoleMenuRoutes } from './role-menus.js';
@@ -23,6 +24,7 @@ export const COMMUNITY_ROUTE_PLUGINS: AdminRoutePlugin[] = [
   registerCustomCommandRoutes,
   registerBirthdayRoutes,
   registerAutomodRoutes,
+  registerCommandsRoutes,
   registerPlaceholderRoutes,
 ];
 

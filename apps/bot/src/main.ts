@@ -149,11 +149,13 @@ async function main(): Promise<void> {
   kernel.health.register({
     name: 'discord',
     async check() {
+      // Discord connectivity is INFORMATIONAL, not fatal to the worker's
+      // health: the internal API, scheduler and DB keep working without it.
+      // A bad/expired token (state 'error') must NOT make the container
+      // unhealthy and trigger restart loops — the real state is surfaced on
+      // the admin dashboard. Always report ok; carry the state as detail.
       const status = adapter.getStatus();
-      // 'disabled' is a valid configuration, not a failure.
-      return status.state === 'error'
-        ? { status: 'error', detail: status.detail }
-        : { status: 'ok', detail: status.state };
+      return { status: 'ok', detail: status.detail ?? status.state };
     },
   });
 

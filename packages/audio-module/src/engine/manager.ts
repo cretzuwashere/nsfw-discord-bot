@@ -93,4 +93,18 @@ export class PlayerManager {
     const cleared = session.clearQueue();
     return { ok: true, message: `Cleared ${cleared} queued track(s).` };
   }
+
+  pause(guildExternalId: string): InternalActionResult {
+    const result = this.sessions.get(guildExternalId)?.pause() ?? 'not-playing';
+    return result === 'paused'
+      ? { ok: true, message: 'Paused.' }
+      : { ok: false, message: result === 'already-paused' ? 'Already paused.' : 'Nothing is playing.' };
+  }
+
+  resume(guildExternalId: string): InternalActionResult {
+    const result = this.sessions.get(guildExternalId)?.resume() ?? 'not-paused';
+    return result === 'resumed'
+      ? { ok: true, message: 'Resumed.' }
+      : { ok: false, message: 'Nothing is paused.' };
+  }
 }

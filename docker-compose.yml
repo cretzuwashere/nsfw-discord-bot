@@ -50,6 +50,11 @@ x-dev-environment: &dev-environment
   AUDIO_REQUEST_TIMEOUT_MS: ${AUDIO_REQUEST_TIMEOUT_MS:-15000}
   AUDIO_ENABLE_STREAMING_SOURCES: ${AUDIO_ENABLE_STREAMING_SOURCES:-true}
   YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
+  # To play PRIVATE/age-restricted YouTube videos: export your YouTube cookies
+  # to ./secrets/youtube-cookies.txt (bind-mounted at /workspace) and set
+  # YTDLP_COOKIES_FILE=/workspace/secrets/youtube-cookies.txt in .env.
+  # Unlisted videos play WITHOUT this. See docs/AUDIO_SOURCES.md.
+  YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-}
   UPLOADS_DIR: ${UPLOADS_DIR:-/workspace/uploads}
   E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-e2e-admin@example.com}
   E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-e2e_test_password_123}

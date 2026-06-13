@@ -40,6 +40,9 @@ x-app-environment: &app-environment
   AUDIO_REQUEST_TIMEOUT_MS: ${AUDIO_REQUEST_TIMEOUT_MS:-15000}
   AUDIO_ENABLE_STREAMING_SOURCES: ${AUDIO_ENABLE_STREAMING_SOURCES:-true}
   YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
+  # For private/age-restricted YouTube: mount a cookies file into the bot
+  # (see the commented volume on the `bot` service) and point this at it.
+  YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-}
   UPLOADS_DIR: ${UPLOADS_DIR:-/app/uploads}
 
 services:
@@ -108,6 +111,10 @@ services:
     environment: *app-environment
     volumes:
       - uploads-prod:/app/uploads
+      # For private YouTube playback: place youtube-cookies.txt next to this
+      # compose file, uncomment, and set
+      # YTDLP_COOKIES_FILE=/secrets/youtube-cookies.txt
+      # - ./youtube-cookies.txt:/secrets/youtube-cookies.txt:ro
     depends_on:
       db:
         condition: service_healthy

@@ -29,6 +29,17 @@ export class GuildPlaybackSession {
   private durationTimer: NodeJS.Timeout | null = null;
   /** Set before an intentional stop so the resulting 'finished' event is ignored. */
   private suppressNextFinish = false;
+  /** Elapsed-time tracking for the now-playing panel (pause-aware). */
+  private elapsedBeforePauseMs = 0;
+  private playingSinceMs: number | null = null;
+
+  /** Whole seconds elapsed in the current track, accounting for pauses. */
+  getElapsedSeconds(): number {
+    const liveMs = this.playingSinceMs ? Date.now() - this.playingSinceMs : 0;
+    const total = Math.floor((this.elapsedBeforePauseMs + liveMs) / 1000);
+    const duration = this.nowPlaying?.metadata.durationSeconds;
+    return duration ? Math.min(total, duration) : total;
+  }
 
   constructor(
     readonly guildExternalId: string,
@@ -114,12 +125,20 @@ export class GuildPlaybackSession {
   pause(): PauseResult {
     if (!this.nowPlaying) return 'not-playing';
     if (this.voiceRef.status === 'paused') return 'already-paused';
-    return this.voiceRef.pause() ? 'paused' : 'not-playing';
+    if (!this.voiceRef.pause()) return 'not-playing';
+    // Freeze the elapsed clock at the pause point.
+    if (this.playingSinceMs) {
+      this.elapsedBeforePauseMs += Date.now() - this.playingSinceMs;
+      this.playingSinceMs = null;
+    }
+    return 'paused';
   }
 
   resume(): ResumeResult {
     if (this.voiceRef.status !== 'paused') return 'not-paused';
-    return this.voiceRef.resume() ? 'resumed' : 'not-paused';
+    if (!this.voiceRef.resume()) return 'not-paused';
+    this.playingSinceMs = Date.now();
+    return 'resumed';
   }
 
   getSnapshot(): QueueSnapshot {
@@ -130,6 +149,7 @@ export class GuildPlaybackSession {
       nowPlaying: this.nowPlaying?.metadata ?? null,
       queue: this.queue.peekAll().map((item) => item.metadata),
       maxQueueSize: this.limits.maxQueueSize,
+      elapsedSeconds: this.nowPlaying ? this.getElapsedSeconds() : undefined,
     };
   }
 
@@ -173,6 +193,8 @@ export class GuildPlaybackSession {
       await this.voiceRef.play(track.source, (event) => this.handleEvent(event));
       // NOTE: the failure counter only resets when a track FINISHES
       // successfully — merely starting must not defeat the error cutoff.
+      this.elapsedBeforePauseMs = 0;
+      this.playingSinceMs = Date.now();
       this.armDurationTimer();
     } catch (error) {
       this.finishHistory('failed', safeErrorSummary(error));

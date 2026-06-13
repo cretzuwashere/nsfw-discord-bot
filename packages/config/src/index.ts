@@ -46,6 +46,12 @@ const envSchema = z.object({
     .default('true')
     .transform((v) => v.toLowerCase() !== 'false'),
   YTDLP_PATH: z.string().optional().default('yt-dlp'),
+  /**
+   * Path to a Netscape-format cookies.txt mounted into the bot container.
+   * Required to play PRIVATE / age-restricted YouTube videos (unlisted
+   * videos play without it). Empty = no cookies.
+   */
+  YTDLP_COOKIES_FILE: z.string().optional().default(''),
 
   /** Directory for uploaded card assets (a persistent Docker volume). */
   UPLOADS_DIR: z.string().optional().default('/workspace/uploads'),
@@ -94,6 +100,8 @@ export interface AppConfig {
     /** YouTube/SoundCloud/Spotify providers (yt-dlp based). */
     enableStreamingSources: boolean;
     ytdlpPath: string;
+    /** Cookies file for private/age-restricted YouTube videos ('' = none). */
+    ytdlpCookiesFile: string;
   };
   /** Filesystem paths (persistent volumes). */
   storage: {
@@ -148,6 +156,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       requestTimeoutMs: e.AUDIO_REQUEST_TIMEOUT_MS,
       enableStreamingSources: e.AUDIO_ENABLE_STREAMING_SOURCES,
       ytdlpPath: e.YTDLP_PATH,
+      ytdlpCookiesFile: e.YTDLP_COOKIES_FILE,
     },
     storage: {
       uploadsDir: e.UPLOADS_DIR,

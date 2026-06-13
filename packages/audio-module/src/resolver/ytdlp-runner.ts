@@ -26,13 +26,30 @@ const MAX_JSON_BYTES = 20 * 1024 * 1024; // playlists can be large; cap hard
 /** Flags applied to every invocation: quiet, no playlists, no surprises. */
 const COMMON_ARGS = ['--no-playlist', '--no-warnings', '--no-progress', '--no-cache-dir'];
 
-export function createExecYtDlpRunner(binaryPath: string, logger: Logger): YtDlpRunner {
+export interface YtDlpRunnerOptions {
+  /**
+   * Path to a Netscape cookies.txt. When set, `--cookies <file>` is added to
+   * every invocation so PRIVATE / age-restricted YouTube videos resolve and
+   * play. Unlisted videos work without it.
+   */
+  cookiesFile?: string | undefined;
+}
+
+export function createExecYtDlpRunner(
+  binaryPath: string,
+  logger: Logger,
+  options: YtDlpRunnerOptions = {}
+): YtDlpRunner {
+  const baseArgs = options.cookiesFile
+    ? [...COMMON_ARGS, '--cookies', options.cookiesFile]
+    : COMMON_ARGS;
+
   return {
     json(args: string[], timeoutMs: number): Promise<unknown> {
       return new Promise((resolve, reject) => {
         execFile(
           binaryPath,
-          [...COMMON_ARGS, ...args],
+          [...baseArgs, ...args],
           { timeout: timeoutMs, maxBuffer: MAX_JSON_BYTES, windowsHide: true },
           (error, stdout, stderr) => {
             if (error) {
@@ -62,7 +79,7 @@ export function createExecYtDlpRunner(binaryPath: string, logger: Logger): YtDlp
     },
 
     stream(args: string[]): Readable {
-      const child = spawn(binaryPath, [...COMMON_ARGS, ...args], {
+      const child = spawn(binaryPath, [...baseArgs, ...args], {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });

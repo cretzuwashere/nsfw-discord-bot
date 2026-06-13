@@ -38,6 +38,8 @@ export interface QueueSnapshot {
   nowPlaying: TrackSummary | null;
   queue: TrackSummary[];
   maxQueueSize: number;
+  /** Seconds elapsed in the current track (pause-aware), when playing. */
+  elapsedSeconds?: number | undefined;
 }
 
 export type AdapterConnectionState = 'disabled' | 'connecting' | 'connected' | 'disconnected' | 'error';

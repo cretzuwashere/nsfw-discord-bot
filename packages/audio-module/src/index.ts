@@ -4,7 +4,7 @@ import type { PlaybackRepo } from '@botplatform/database';
 import type { Logger } from '@botplatform/logger';
 import type { InternalActionResult, QueueSnapshot } from '@botplatform/shared';
 import { MODULE_KEYS } from '@botplatform/shared';
-import { buildAudioCommands } from './commands.js';
+import { buildAudioCommands, buildAudioComponentHandler } from './commands.js';
 import { PlayerManager } from './engine/manager.js';
 import { DirectHttpAudioProvider } from './resolver/providers/direct-http.js';
 import { SpotifyAudioProvider } from './resolver/providers/spotify-provider.js';
@@ -37,7 +37,9 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
   const providers: AudioProvider[] = [];
   let ytdlpRunner: ReturnType<typeof createExecYtDlpRunner> | null = null;
   if (options.config.audio.enableStreamingSources) {
-    ytdlpRunner = createExecYtDlpRunner(options.config.audio.ytdlpPath, logger);
+    ytdlpRunner = createExecYtDlpRunner(options.config.audio.ytdlpPath, logger, {
+      cookiesFile: options.config.audio.ytdlpCookiesFile || undefined,
+    });
     const limits = { maxTrackDurationSeconds: options.config.audio.maxTrackDurationSeconds };
     providers.push(
       new YtDlpAudioProvider(ytdlpRunner, limits),
@@ -68,6 +70,8 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
         logger,
       },
     }),
+    // The now-playing panel's control buttons route back here.
+    events: [{ type: 'component.interaction', handle: buildAudioComponentHandler(manager) }],
     async onLoad(ctx) {
       let streamingReady = false;
       if (ytdlpRunner) {
@@ -112,3 +116,11 @@ export { SpotifyAudioProvider } from './resolver/providers/spotify-provider.js';
 export { createExecYtDlpRunner } from './resolver/ytdlp-runner.js';
 export type { YtDlpRunner } from './resolver/ytdlp-runner.js';
 export type { AudioProvider, ResolveContext, ResolvedTrack } from './resolver/types.js';
+export {
+  buildNowPlayingPanel,
+  progressBar,
+  audioButtonId,
+  parseAudioButton,
+  AUDIO_BUTTON_PREFIX,
+} from './now-playing.js';
+export { buildAudioComponentHandler } from './commands.js';

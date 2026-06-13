@@ -40,7 +40,12 @@ function makeCtx(
   overrides: Partial<CommandContext> = {}
 ) {
   const replies: Array<{ content: string; ephemeral: boolean }> = [];
-  const ctx: CommandContext & { replies: typeof replies; deferred: () => boolean } = {
+  const richReplies: import('@botplatform/core').OutgoingMessage[] = [];
+  const ctx: CommandContext & {
+    replies: typeof replies;
+    richReplies: typeof richReplies;
+    deferred: () => boolean;
+  } = {
     commandName,
     subcommand: null,
     adapterKey: 'test',
@@ -51,6 +56,7 @@ function makeCtx(
     logger: createSilentLogger(),
     voice: harness.voice,
     replies,
+    richReplies,
     deferred: () => deferCalls > 0,
     defer: vi.fn(async () => {
       deferCalls++;
@@ -61,6 +67,9 @@ function makeCtx(
           ? { content: payload, ephemeral: false }
           : { content: payload.content, ephemeral: payload.ephemeral ?? false }
       );
+    }),
+    replyRich: vi.fn(async (message) => {
+      richReplies.push(message);
     }),
     ...overrides,
   };
@@ -86,10 +95,10 @@ beforeEach(() => {
 });
 
 describe('command registration', () => {
-  it('exposes all nine audio commands, all guild-only', () => {
+  it('exposes all audio commands, all guild-only', () => {
     const names = [...harness.commands.keys()].sort();
     expect(names).toEqual(
-      ['join', 'leave', 'nowplaying', 'pause', 'play', 'queue', 'resume', 'skip', 'stop'].sort()
+      ['controls', 'join', 'leave', 'nowplaying', 'pause', 'play', 'queue', 'resume', 'skip', 'stop'].sort()
     );
     for (const command of harness.commands.values()) {
       expect(command.guildOnly).toBe(true);
@@ -174,7 +183,8 @@ describe('/play', () => {
 
   it('plays immediately when idle, then queues, then rejects when full', async () => {
     const first = await run(harness, 'play', { url: 'https://example.com/one.mp3' });
-    expect(first.replies[0]?.content).toMatch(/Now playing: \*\*one\.mp3\*\*/);
+    // Playback start now shows the visual now-playing panel.
+    expect(first.richReplies[0]?.embed?.description).toMatch(/\*\*one\.mp3\*\*/);
 
     const second = await run(harness, 'play', { url: 'https://example.com/two.mp3' });
     expect(second.replies[0]?.content).toMatch(/Queued \(#1\): \*\*two\.mp3\*\*/);
@@ -260,23 +270,38 @@ describe('/stop', () => {
   });
 });
 
-describe('/nowplaying', () => {
-  it('handles the idle state', async () => {
+describe('/nowplaying (visual panel)', () => {
+  it('renders an idle panel when nothing is playing', async () => {
     const ctx = await run(harness, 'nowplaying');
-    expect(ctx.replies[0]?.content).toMatch(/nothing is playing right now/i);
+    const panel = ctx.richReplies[0];
+    expect(panel?.embed?.title).toMatch(/idle/i);
+    expect(panel?.buttons?.length).toBeGreaterThan(0);
   });
 
-  it('shows title, status, source and requester', async () => {
+  it('renders a now-playing panel with the track, source and controls', async () => {
     await run(harness, 'play', { url: 'https://example.com/one.mp3' });
     const ctx = await run(harness, 'nowplaying');
-    const text = ctx.replies[0]?.content ?? '';
-    expect(text).toMatch(/\*\*one\.mp3\*\*/);
-    expect(text).toMatch(/Status: playing/);
-    expect(text).toMatch(/direct-http/);
-    expect(text).toMatch(/Requested by: Tester/);
+    const panel = ctx.richReplies[0];
+    expect(panel?.embed?.title).toMatch(/Now Playing/i);
+    expect(panel?.embed?.description).toMatch(/\*\*one\.mp3\*\*/);
+    // Pause button present while playing.
+    expect(panel?.buttons?.some((b) => b.customId === 'audio:pause')).toBe(true);
 
     await run(harness, 'pause');
-    const paused = await run(harness, 'nowplaying');
-    expect(paused.replies[0]?.content).toMatch(/Status: paused/);
+    const paused = (await run(harness, 'nowplaying')).richReplies[0];
+    expect(paused?.embed?.title).toMatch(/Paused/i);
+    // Resume button present while paused.
+    expect(paused?.buttons?.some((b) => b.customId === 'audio:resume')).toBe(true);
+  });
+});
+
+describe('/controls', () => {
+  it('renders the control panel', async () => {
+    await run(harness, 'play', { url: 'https://example.com/one.mp3' });
+    const ctx = await run(harness, 'controls');
+    const panel = ctx.richReplies[0];
+    expect(panel?.buttons?.map((b) => b.customId)).toEqual(
+      expect.arrayContaining(['audio:skip', 'audio:stop', 'audio:leave'])
+    );
   });
 });

@@ -28,7 +28,7 @@ import {
   type PartialGuildMember,
 } from 'discord.js';
 import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
-import { DiscordGuildService } from './guild-service.js';
+import { buildMessagePayload, DiscordGuildService } from './guild-service.js';
 import { createDiscordVoiceSession, type DiscordVoiceSession } from './voice-session.js';
 
 /**
@@ -237,6 +237,19 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
             ctx.logger.debug({ err: error }, 'component reply failed');
           }
         },
+        update: async (message) => {
+          try {
+            const payload = buildMessagePayload(message) as Parameters<typeof interaction.update>[0];
+            if (acknowledged) {
+              await interaction.editReply(payload as Parameters<typeof interaction.editReply>[0]);
+            } else {
+              acknowledged = true;
+              await interaction.update(payload);
+            }
+          } catch (error) {
+            ctx.logger.debug({ err: error }, 'component update failed');
+          }
+        },
       };
       try {
         await ctx.dispatchEvent(event);
@@ -367,6 +380,23 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
             content: normalized.content,
             flags: normalized.ephemeral ? MessageFlags.Ephemeral : undefined,
           });
+        }
+      },
+      replyRich: async (message, opts) => {
+        const ephemeral = opts?.ephemeral ?? false;
+        const base = buildMessagePayload(message);
+        if (interaction.deferred) {
+          await interaction.editReply(base as Parameters<typeof interaction.editReply>[0]);
+        } else if (interaction.replied) {
+          await interaction.followUp({
+            ...(base as Record<string, unknown>),
+            flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          } as Parameters<typeof interaction.followUp>[0]);
+        } else {
+          await interaction.reply({
+            ...(base as Record<string, unknown>),
+            flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          } as Parameters<typeof interaction.reply>[0]);
         }
       },
     };

@@ -1,4 +1,5 @@
 import type { Logger } from '@botplatform/logger';
+import type { OutgoingMessage } from './guild-service.js';
 import type { VoiceCapability } from './voice.js';
 
 export interface CommandOptionDef {
@@ -36,6 +37,12 @@ export interface CommandContext {
   defer(): Promise<void>;
   /** Send the reply (or edit the deferred acknowledgement). */
   reply(payload: ReplyPayload): Promise<void>;
+  /**
+   * Reply with a rich message (embed, buttons, attachment). Optional — an
+   * adapter without rich-reply support omits it, so callers should fall back
+   * to `reply` with plain text.
+   */
+  replyRich?(message: OutgoingMessage, options?: { ephemeral?: boolean }): Promise<void>;
 }
 
 /** A subcommand of a parent command (e.g. `/announcement send`). */

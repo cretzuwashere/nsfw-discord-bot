@@ -17,6 +17,58 @@ Provider order: platform resolvers claim their hosts first; the direct-HTTP
 provider is the catch-all. Everything is **lazy** — queued items hold no
 processes or sockets; the download/stream starts only when playback begins.
 
+## Private & unlisted YouTube videos (school-project note)
+
+There are three YouTube visibilities and they behave differently:
+
+| Visibility | Plays with just the link? | Needs cookies? |
+|------------|---------------------------|----------------|
+| **Public** | ✅ | No |
+| **Unlisted** (anyone with the link) | ✅ | No |
+| **Private** (only invited accounts) / age-restricted | ❌ | **Yes** |
+
+So if your "private access" links are **unlisted** (the usual choice for
+school projects — the video isn't searchable but anyone with the URL can open
+it), they play out of the box, no setup. Just `/play <link>`.
+
+If they are genuinely **Private** (or age-restricted), yt-dlp must authenticate
+as an account that has access, via a cookies file:
+
+1. In a browser **logged in to the YouTube account that can see the video**,
+   export cookies to a Netscape-format `cookies.txt` (e.g. the
+   "Get cookies.txt" browser extension), restricting to `youtube.com`.
+2. Save it as `secrets/youtube-cookies.txt` in the project (the `secrets/`
+   folder is gitignored — never commit cookies).
+3. In `.env` set: `YTDLP_COOKIES_FILE=/workspace/secrets/youtube-cookies.txt`
+   (dev) — the repo is bind-mounted at `/workspace`, so the file is visible to
+   the bot. For production, mount the file into the bot container (see the
+   commented volume in `docker-compose.prod.yml`) and point the same variable
+   at it, e.g. `/secrets/youtube-cookies.txt`.
+4. Restart the bot: `docker compose up -d bot`.
+
+The bot then passes `--cookies` to yt-dlp on every call, so private/restricted
+videos resolve and play. Cookies expire periodically — re-export if private
+videos stop working. **Recommendation for a school demo: use Unlisted videos
+and skip cookies entirely.**
+
+## Visual now-playing panel & controls
+
+The audio bot has a visual control surface (no need to remember commands):
+
+- **`/controls`** posts a panel: an embed with the track, a Unicode
+  **progress bar** (`████████▒▒▒▒  1:23 / 4:56`), the source, who requested it,
+  and the next few queued tracks — plus a row of buttons:
+  **⏸ Pause / ▶ Resume · ⏭ Skip · ⏹ Stop · 👋 Leave · 🔄 Refresh**.
+- **`/play <link>`** shows the same panel automatically when playback starts.
+- **`/nowplaying`** shows it on demand.
+- Pressing a button performs the action and **refreshes the panel in place**
+  (the progress bar and Pause/Resume swap to match the new state).
+
+Implementation: `packages/audio-module/src/now-playing.ts` builds the panel
+(pure, unit-tested); the buttons route back as `component.interaction` events
+(customId `audio:<control>`) handled by `buildAudioComponentHandler`. Elapsed
+time is tracked pause-aware in `GuildPlaybackSession`.
+
 ## How streaming works (yt-dlp)
 
 `yt-dlp` is the actively-maintained standard for self-hosted bots. Pure-JS
@@ -43,6 +95,7 @@ duration is known.
 |----------|---------|---------|
 | `AUDIO_ENABLE_STREAMING_SOURCES` | `true` | Set `false` to allow only direct audio-file links (no yt-dlp) |
 | `YTDLP_PATH` | `yt-dlp` | Path/command for the binary (it's on `PATH` in the images) |
+| `YTDLP_COOKIES_FILE` | empty | Path to a `cookies.txt` for **private/age-restricted** YouTube. Empty = none (unlisted videos still work). |
 | `MAX_TRACK_DURATION_SECONDS` | `3600` | Tracks longer than this are rejected/skipped |
 | `ALLOWED_AUDIO_DOMAINS` | empty | If set, the **input** URL host must match — add `youtube.com`, `youtu.be`, `soundcloud.com`, `open.spotify.com` if you both restrict and want streaming |
 
