@@ -1,0 +1,62 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const s = settings || {}; %>
+<h1>Welcome / Leave</h1>
+<% if (saved) { %><div class="alert alert-ok" role="status">Settings saved.</div><% } %>
+
+<% if (guilds.length === 0) { %>
+  <section class="card"><p class="muted">No servers yet — the bot records servers when it connects.</p></section>
+<% } else { %>
+<section class="card">
+  <form method="post" action="/welcome/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId" onchange="location.href='/welcome?guild='+this.value">
+      <% for (const g of guilds) { %>
+        <option value="<%= g.id %>" <%= selectedGuildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option>
+      <% } %>
+    </select>
+
+    <h2>Welcome</h2>
+    <label class="checkbox-label"><input type="checkbox" name="welcomeEnabled" <%= s.welcomeEnabled ? 'checked' : '' %>> Enable welcome messages</label>
+    <label for="welcomeChannelId">Welcome channel ID</label>
+    <input id="welcomeChannelId" name="welcomeChannelId" type="text" value="<%= s.welcomeChannelId || '' %>">
+    <label for="welcomeMessage">Welcome message</label>
+    <textarea id="welcomeMessage" name="welcomeMessage" rows="3"><%= s.welcomeMessage || 'Welcome {{user.mention}} to {{server.name}}!' %></textarea>
+    <label for="welcomeCardTemplateId">Welcome card template (optional)</label>
+    <select id="welcomeCardTemplateId" name="welcomeCardTemplateId">
+      <option value="">— none —</option>
+      <% for (const t of cardTemplates) { %>
+        <option value="<%= t.id %>" <%= s.welcomeCardTemplateId === t.id ? 'selected' : '' %>><%= t.name %></option>
+      <% } %>
+    </select>
+
+    <h2>Direct message & roles</h2>
+    <label class="checkbox-label"><input type="checkbox" name="dmEnabled" <%= s.dmEnabled ? 'checked' : '' %>> Send a welcome DM</label>
+    <label for="dmMessage">DM message</label>
+    <textarea id="dmMessage" name="dmMessage" rows="2"><%= s.dmMessage || '' %></textarea>
+    <label for="autoRoleIds">Auto-role IDs on join (comma or newline separated)</label>
+    <textarea id="autoRoleIds" name="autoRoleIds" rows="2"><%= Array.isArray(s.autoRoleIds) ? s.autoRoleIds.join(', ') : '' %></textarea>
+    <label for="delaySeconds">Delay before welcome (seconds, 0–3600)</label>
+    <input id="delaySeconds" name="delaySeconds" type="number" min="0" max="3600" value="<%= s.delaySeconds ?? 0 %>">
+    <label for="rulesChannelId">Rules channel ID (optional, for {{rules}} reference)</label>
+    <input id="rulesChannelId" name="rulesChannelId" type="text" value="<%= s.rulesChannelId || '' %>">
+
+    <h2>Leave</h2>
+    <label class="checkbox-label"><input type="checkbox" name="leaveEnabled" <%= s.leaveEnabled ? 'checked' : '' %>> Enable leave messages</label>
+    <label for="leaveChannelId">Leave channel ID</label>
+    <input id="leaveChannelId" name="leaveChannelId" type="text" value="<%= s.leaveChannelId || '' %>">
+    <label for="leaveMessage">Leave message</label>
+    <textarea id="leaveMessage" name="leaveMessage" rows="2"><%= s.leaveMessage || '{{user.username}} has left the server.' %></textarea>
+
+    <label for="logChannelId">Mod-log channel ID (optional)</label>
+    <input id="logChannelId" name="logChannelId" type="text" value="<%= s.logChannelId || '' %>">
+
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+  <p class="muted small">Placeholders: <code>{{user.mention}}</code>, <code>{{user.username}}</code>,
+  <code>{{user.displayName}}</code>, <code>{{server.name}}</code>, <code>{{server.memberCount}}</code>.
+  Requires the <strong>Server Members</strong> intent (enable it in the Discord developer portal).</p>
+</section>
+<% } %>
+<%- include('partials/footer') %>

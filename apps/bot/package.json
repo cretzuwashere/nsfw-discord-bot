@@ -14,6 +14,7 @@
     "@botplatform/announcements-module": "workspace:*",
     "@botplatform/audio-module": "workspace:*",
     "@botplatform/cards-module": "workspace:*",
+    "@botplatform/welcome-module": "workspace:*",
     "@botplatform/config": "workspace:*",
     "@botplatform/core": "workspace:*",
     "@botplatform/database": "workspace:*",

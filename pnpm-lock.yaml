@@ -170,6 +170,9 @@ importers:
       '@botplatform/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@botplatform/welcome-module':
+        specifier: workspace:*
+        version: link:../../packages/welcome-module
       '@fastify/csrf-protection':
         specifier: 'catalog:'
         version: 8.0.0
@@ -255,6 +258,9 @@ importers:
       '@botplatform/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@botplatform/welcome-module':
+        specifier: workspace:*
+        version: link:../../packages/welcome-module
       '@discordjs/opus':
         specifier: 'catalog:'
         version: 0.10.0
@@ -568,6 +574,37 @@ importers:
         version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
 
   packages/shared:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/welcome-module:
+    dependencies:
+      '@botplatform/config':
+        specifier: workspace:*
+        version: link:../config
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

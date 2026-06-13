@@ -1,6 +1,7 @@
 import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
 import { createCardsModule } from '@botplatform/cards-module';
+import { createWelcomeModule } from '@botplatform/welcome-module';
 import { loadConfig } from '@botplatform/config';
 import { BotKernel, CachedModuleState } from '@botplatform/core';
 import {
@@ -53,6 +54,15 @@ async function main(): Promise<void> {
     guildServiceProvider: adapter,
   });
   const cardsHandle = createCardsModule({ config, logger, db: database.db });
+  const welcomeHandle = createWelcomeModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+    // Bridge cards → welcome: render a template to a PNG by id.
+    renderCard: (templateId, data) => cardsHandle.service.renderById(templateId, data),
+  });
   adapter.onGuildSeen = (externalId, name) => {
     void guildsRepo
       .upsertByExternalId({ adapterKey: ADAPTER_KEYS.discord, externalId, name })
@@ -69,6 +79,7 @@ async function main(): Promise<void> {
       moderationHandle.module,
       announcementsHandle.module,
       cardsHandle.module,
+      welcomeHandle.module,
     ],
     adapters: [adapter],
     audit,
