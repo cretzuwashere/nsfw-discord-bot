@@ -3,6 +3,14 @@ import type {
   AdapterStatus,
   ChannelAdapter,
   CommandContext,
+  ComponentInteractionEvent,
+  GuildService,
+  GuildServiceProvider,
+  MemberJoinEvent,
+  MemberLeaveEvent,
+  MessageCreateEvent,
+  PlatformGuildRef,
+  PlatformUserRef,
   ReplyPayload,
   VoiceCapability,
   VoiceSession,
@@ -14,16 +22,23 @@ import {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  type GuildMember,
   type Interaction,
+  type Message,
+  type PartialGuildMember,
 } from 'discord.js';
 import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
+import { DiscordGuildService } from './guild-service.js';
 import { createDiscordVoiceSession, type DiscordVoiceSession } from './voice-session.js';
 
 /**
  * The Discord channel adapter. All Discord-specific behavior lives here;
  * modules and the kernel speak only in core contracts.
+ *
+ * Implements GuildServiceProvider so modules can act on guilds without
+ * touching discord.js.
  */
-export class DiscordAdapter implements ChannelAdapter {
+export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
   readonly key: string = ADAPTER_KEYS.discord;
 
   private client: Client | null = null;
@@ -44,9 +59,21 @@ export class DiscordAdapter implements ChannelAdapter {
       return;
     }
 
-    const client = new Client({
-      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
-    });
+    // GuildMembers (privileged) powers welcome/leave + member-based modules;
+    // GuildMessages + MessageContent (privileged) power automod content rules.
+    // Privileged intents must be enabled in the Discord developer portal; the
+    // bot still connects without them (those modules just stay degraded).
+    const intents = [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildVoiceStates,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildModeration,
+    ];
+    if (config.discord.enableMessageContent) {
+      intents.push(GatewayIntentBits.MessageContent);
+    }
+    const client = new Client({ intents });
     this.client = client;
     this.state = { state: 'connecting' };
 
@@ -91,6 +118,17 @@ export class DiscordAdapter implements ChannelAdapter {
       void this.handleInteraction(interaction);
     });
 
+    // --- Platform event emission (member/message events) ------------------
+    client.on(Events.GuildMemberAdd, (member) => {
+      void this.emitMemberEvent('member.join', member);
+    });
+    client.on(Events.GuildMemberRemove, (member) => {
+      void this.emitMemberEvent('member.leave', member);
+    });
+    client.on(Events.MessageCreate, (message) => {
+      void this.emitMessageCreate(message);
+    });
+
     try {
       await client.login(config.discord.token);
     } catch (error) {
@@ -127,29 +165,151 @@ export class DiscordAdapter implements ChannelAdapter {
     return { ...this.state };
   }
 
+  // --- GuildServiceProvider --------------------------------------------------
+
+  isReady(): boolean {
+    return this.state.state === 'connected' && this.client !== null;
+  }
+
+  forGuild(guildExternalId: string): GuildService | null {
+    if (!this.client || !this.isReady()) return null;
+    const logger = this.ctx?.logger ?? null;
+    if (!logger) return null;
+    return new DiscordGuildService(guildExternalId, this.client, logger.child({ guildExternalId }));
+  }
+
   // -------------------------------------------------------------------------
 
   private async handleInteraction(interaction: Interaction): Promise<void> {
-    if (!(interaction instanceof ChatInputCommandInteraction)) return;
     const ctx = this.ctx;
     if (!ctx) return;
 
-    const commandContext = this.buildCommandContext(interaction);
-    try {
-      await ctx.dispatch(commandContext);
-    } catch (error) {
-      // The dispatcher has its own error boundary; this is the last resort.
-      ctx.logger.error({ err: error, command: interaction.commandName }, 'dispatch failed');
+    if (interaction instanceof ChatInputCommandInteraction) {
+      const commandContext = this.buildCommandContext(interaction);
       try {
-        if (interaction.deferred || interaction.replied) {
-          await interaction.editReply({ content: GENERIC_USER_ERROR });
-        } else {
-          await interaction.reply({ content: GENERIC_USER_ERROR, flags: MessageFlags.Ephemeral });
+        await ctx.dispatch(commandContext);
+      } catch (error) {
+        // The dispatcher has its own error boundary; this is the last resort.
+        ctx.logger.error({ err: error, command: interaction.commandName }, 'dispatch failed');
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: GENERIC_USER_ERROR });
+          } else {
+            await interaction.reply({ content: GENERIC_USER_ERROR, flags: MessageFlags.Ephemeral });
+          }
+        } catch {
+          // Nothing more we can safely do.
         }
-      } catch {
-        // Nothing more we can safely do.
+      }
+      return;
+    }
+
+    // Button clicks and select-menu submissions → component.interaction event.
+    if (interaction.isButton() || interaction.isStringSelectMenu()) {
+      const values = interaction.isStringSelectMenu() ? interaction.values : [];
+      const rawRoles = interaction.member?.roles;
+      const userRoleIds = Array.isArray(rawRoles)
+        ? rawRoles
+        : rawRoles
+          ? [...rawRoles.cache.keys()]
+          : [];
+      let acknowledged = false;
+      const event: ComponentInteractionEvent = {
+        type: 'component.interaction',
+        adapterKey: this.key,
+        guild: interaction.guild
+          ? { id: null, externalId: interaction.guild.id, name: interaction.guild.name }
+          : null,
+        channelId: interaction.channelId,
+        customId: interaction.customId,
+        values,
+        user: this.toUserRef(interaction.user),
+        userRoleIds,
+        reply: async (content: string) => {
+          try {
+            if (acknowledged) {
+              await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+            } else {
+              acknowledged = true;
+              await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+            }
+          } catch (error) {
+            ctx.logger.debug({ err: error }, 'component reply failed');
+          }
+        },
+      };
+      try {
+        await ctx.dispatchEvent(event);
+        // If no module replied, acknowledge so Discord doesn't show "failed".
+        if (!acknowledged) {
+          await interaction.deferUpdate().catch(() => {});
+        }
+      } catch (error) {
+        ctx.logger.error({ err: error, customId: interaction.customId }, 'component dispatch failed');
       }
     }
+  }
+
+  private async emitMemberEvent(
+    type: 'member.join' | 'member.leave',
+    member: GuildMember | PartialGuildMember
+  ): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const guild: PlatformGuildRef = {
+      id: null,
+      externalId: member.guild.id,
+      name: member.guild.name,
+    };
+    const base = {
+      adapterKey: this.key,
+      guild,
+      user: this.toUserRef(member.user),
+      memberCount: member.guild.memberCount,
+    };
+    const event: MemberJoinEvent | MemberLeaveEvent =
+      type === 'member.join' ? { type, ...base } : { type, ...base };
+    await ctx.dispatchEvent(event).catch((error) => {
+      ctx.logger.error({ err: error, type }, 'member event dispatch failed');
+    });
+  }
+
+  private async emitMessageCreate(message: Message): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx || message.author.bot || !message.inGuild()) return;
+    const event: MessageCreateEvent = {
+      type: 'message.create',
+      adapterKey: this.key,
+      guild: { id: null, externalId: message.guild.id, name: message.guild.name },
+      channelId: message.channelId,
+      messageId: message.id,
+      author: this.toUserRef(message.author),
+      content: message.content, // empty unless MessageContent intent is on
+      mentionCount: message.mentions.users.size + message.mentions.roles.size,
+      hasAttachments: message.attachments.size > 0,
+      authorRoleIds: message.member ? [...message.member.roles.cache.keys()] : [],
+    };
+    await ctx.dispatchEvent(event).catch((error) => {
+      ctx.logger.error({ err: error }, 'message event dispatch failed');
+    });
+  }
+
+  private toUserRef(user: {
+    id: string;
+    username: string;
+    bot?: boolean;
+    displayAvatarURL?: () => string;
+    createdAt?: Date;
+    globalName?: string | null;
+  }): PlatformUserRef {
+    return {
+      externalId: user.id,
+      username: user.username,
+      displayName: user.globalName ?? user.username,
+      avatarUrl: user.displayAvatarURL?.(),
+      createdAt: user.createdAt,
+      bot: user.bot,
+    };
   }
 
   private buildCommandContext(interaction: ChatInputCommandInteraction): CommandContext {

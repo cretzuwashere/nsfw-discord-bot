@@ -34,6 +34,7 @@ x-dev-environment: &dev-environment
   DISCORD_TOKEN: ${DISCORD_TOKEN:-}
   DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
   DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+  DISCORD_ENABLE_MESSAGE_CONTENT: ${DISCORD_ENABLE_MESSAGE_CONTENT:-false}
   ADMIN_PORT: ${ADMIN_PORT:-3000}
   PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:3000}
   SESSION_SECRET: ${SESSION_SECRET:-change_me_to_a_random_string_of_at_least_32_chars}
@@ -47,6 +48,9 @@ x-dev-environment: &dev-environment
   MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-50}
   MAX_TRACK_DURATION_SECONDS: ${MAX_TRACK_DURATION_SECONDS:-3600}
   AUDIO_REQUEST_TIMEOUT_MS: ${AUDIO_REQUEST_TIMEOUT_MS:-15000}
+  AUDIO_ENABLE_STREAMING_SOURCES: ${AUDIO_ENABLE_STREAMING_SOURCES:-true}
+  YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
+  UPLOADS_DIR: ${UPLOADS_DIR:-/workspace/uploads}
   E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-e2e-admin@example.com}
   E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-e2e_test_password_123}
   PLAYWRIGHT_BASE_URL: ${PLAYWRIGHT_BASE_URL:-http://admin:3000}
@@ -62,6 +66,8 @@ x-dev-volumes: &dev-volumes
   - node_modules:/workspace/node_modules
   # Persistent pnpm content-addressable store → re-installs are fast.
   - pnpm-store:/root/.local/share/pnpm
+  # Uploaded card-template assets (dynamic cards module).
+  - uploads:/workspace/uploads
 
 x-dev-build: &dev-build
   context: .
@@ -171,3 +177,4 @@ volumes:
   pgdata:
   node_modules:
   pnpm-store:
+  uploads:

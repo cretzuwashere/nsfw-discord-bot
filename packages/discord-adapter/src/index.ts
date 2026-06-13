@@ -1,4 +1,5 @@
 export { DiscordAdapter, normalizeReply } from './adapter.js';
+export { DiscordGuildService, buildMessagePayload } from './guild-service.js';
 export { commandsToDiscordJson, DISCORD_OPTION_TYPES } from './command-mapper.js';
 export type { DiscordCommandJson } from './command-mapper.js';
 export { registerSlashCommands } from './register-commands.js';

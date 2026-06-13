@@ -5,7 +5,8 @@ import type { CommandDispatcher } from './contracts/commands.js';
 import type { BotModule } from './contracts/module.js';
 import type { AuditLogPort, ModuleStatePort } from './contracts/ports.js';
 import { HealthAggregator } from './health.js';
-import { ModuleRegistry } from './registry.js';
+import { ModuleRegistry, type EventDispatcher } from './registry.js';
+import { Scheduler } from './scheduler.js';
 
 export interface KernelOptions {
   config: AppConfig;
@@ -27,12 +28,16 @@ export class BotKernel {
   readonly registry = new ModuleRegistry();
   readonly health = new HealthAggregator();
   readonly startedAt = new Date();
+  readonly scheduler: Scheduler;
 
   private dispatcher: CommandDispatcher | null = null;
+  private eventDispatcher: EventDispatcher | null = null;
   private started = false;
   private stopping = false;
 
-  constructor(private readonly options: KernelOptions) {}
+  constructor(private readonly options: KernelOptions) {
+    this.scheduler = new Scheduler(options.logger.child({ component: 'scheduler' }));
+  }
 
   get logger(): Logger {
     return this.options.logger;
@@ -41,6 +46,11 @@ export class BotKernel {
   getDispatcher(): CommandDispatcher {
     if (!this.dispatcher) throw new Error('Kernel not started');
     return this.dispatcher;
+  }
+
+  getEventDispatcher(): EventDispatcher {
+    if (!this.eventDispatcher) throw new Error('Kernel not started');
+    return this.eventDispatcher;
   }
 
   async start(): Promise<void> {
@@ -56,6 +66,7 @@ export class BotKernel {
     }
 
     this.dispatcher = this.registry.createDispatcher({ logger, moduleState, audit });
+    this.eventDispatcher = this.registry.createEventDispatcher({ logger, moduleState });
 
     for (const module of modules) {
       try {
@@ -74,6 +85,7 @@ export class BotKernel {
           audit,
           commands: this.registry.allCommands(),
           dispatch: this.dispatcher,
+          dispatchEvent: this.eventDispatcher,
         });
         logger.info({ adapter: adapter.key }, 'adapter started');
       } catch (error) {
@@ -88,6 +100,8 @@ export class BotKernel {
       }
     }
 
+    this.scheduler.start();
+
     await audit.record({
       actorType: 'system',
       action: 'system.startup',
@@ -101,6 +115,8 @@ export class BotKernel {
     this.stopping = true;
     const { logger, modules, adapters, audit, onShutdown } = this.options;
     logger.info('bot kernel stopping');
+
+    this.scheduler.stop();
 
     for (const adapter of adapters) {
       try {

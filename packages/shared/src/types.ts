@@ -2,6 +2,15 @@
 export const MODULE_KEYS = {
   audioPlayer: 'audio-player',
   moderation: 'moderation',
+  announcements: 'announcements',
+  welcome: 'welcome',
+  dynamicCards: 'dynamic-cards',
+  roleMenus: 'role-menus',
+  birthdays: 'birthdays',
+  reminders: 'reminders',
+  scheduledMessages: 'scheduled-messages',
+  automod: 'automod',
+  customCommands: 'custom-commands',
 } as const;
 export type ModuleKey = (typeof MODULE_KEYS)[keyof typeof MODULE_KEYS];
 

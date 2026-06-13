@@ -33,10 +33,14 @@ x-app-environment: &app-environment
   HEALTH_PORT: ${HEALTH_PORT:-8081}
   INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required - a long random shared secret}
   BOT_INTERNAL_URL: ${BOT_INTERNAL_URL:-http://bot:8081}
+  DISCORD_ENABLE_MESSAGE_CONTENT: ${DISCORD_ENABLE_MESSAGE_CONTENT:-false}
   ALLOWED_AUDIO_DOMAINS: ${ALLOWED_AUDIO_DOMAINS:-}
   MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-50}
   MAX_TRACK_DURATION_SECONDS: ${MAX_TRACK_DURATION_SECONDS:-3600}
   AUDIO_REQUEST_TIMEOUT_MS: ${AUDIO_REQUEST_TIMEOUT_MS:-15000}
+  AUDIO_ENABLE_STREAMING_SOURCES: ${AUDIO_ENABLE_STREAMING_SOURCES:-true}
+  YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
+  UPLOADS_DIR: ${UPLOADS_DIR:-/app/uploads}
 
 services:
   # --- PostgreSQL ------------------------------------------------------------
@@ -102,6 +106,8 @@ services:
       target: bot
     image: botplatform-bot
     environment: *app-environment
+    volumes:
+      - uploads-prod:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -119,6 +125,8 @@ services:
       target: admin
     image: botplatform-admin
     environment: *app-environment
+    volumes:
+      - uploads-prod:/app/uploads
     ports:
       - '${ADMIN_PORT:-3000}:${ADMIN_PORT:-3000}'
     depends_on:
@@ -131,3 +139,4 @@ services:
 
 volumes:
   pgdata-prod:
+  uploads-prod:

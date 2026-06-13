@@ -236,6 +236,8 @@ export const permissionMappings = pgTable(
 // Audit logs
 // ---------------------------------------------------------------------------
 
+export const auditSeverity = pgEnum('audit_severity', ['info', 'notice', 'warning', 'critical']);
+
 export const auditLogs = pgTable(
   'audit_logs',
   {
@@ -243,6 +245,9 @@ export const auditLogs = pgTable(
     actorType: actorType('actor_type').notNull(),
     actorId: text('actor_id'),
     action: text('action').notNull(),
+    /** Module the event belongs to (e.g. 'announcements'); null = platform-level. */
+    moduleKey: text('module_key'),
+    severity: auditSeverity('severity').notNull().default('info'),
     guildId: text('guild_id'),
     targetType: text('target_type'),
     targetId: text('target_id'),
@@ -254,6 +259,8 @@ export const auditLogs = pgTable(
   (table) => [
     index('audit_logs_created_idx').on(table.createdAt),
     index('audit_logs_action_idx').on(table.action),
+    index('audit_logs_module_idx').on(table.moduleKey),
+    index('audit_logs_severity_idx').on(table.severity),
   ]
 );
 
@@ -310,3 +317,490 @@ export const systemSettings = pgTable('system_settings', {
     .default(sql`'{}'::jsonb`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ===========================================================================
+// Community management modules
+// ===========================================================================
+
+export const announcementStatus = pgEnum('announcement_status', [
+  'draft',
+  'scheduled',
+  'sent',
+  'failed',
+  'canceled',
+]);
+
+export const scheduleType = pgEnum('schedule_type', [
+  'once',
+  'interval',
+  'daily',
+  'weekly',
+  'monthly',
+  'cron',
+]);
+
+export const roleMenuType = pgEnum('role_menu_type', ['reaction', 'button', 'select']);
+
+export const roleMenuMode = pgEnum('role_menu_mode', [
+  'multiple',
+  'single',
+  'toggle',
+  'add_only',
+  'remove_only',
+  'unique', // replace role from group
+]);
+
+export const moderationCaseStatus = pgEnum('moderation_case_status', [
+  'open',
+  'resolved',
+  'expired',
+  'revoked',
+]);
+
+export const automodRuleType = pgEnum('automod_rule_type', [
+  'banned_words',
+  'spam',
+  'repeated_messages',
+  'mention_spam',
+  'caps',
+  'invite_links',
+  'suspicious_links',
+  'attachments',
+  'new_account',
+  'raid',
+]);
+
+export const automodAction = pgEnum('automod_action', [
+  'log_only',
+  'delete',
+  'warn',
+  'timeout',
+  'mute',
+  'kick',
+  'ban',
+]);
+
+export const customCommandResponseType = pgEnum('custom_command_response_type', [
+  'text',
+  'embed',
+  'random',
+  'link',
+]);
+
+// --- Announcements ---------------------------------------------------------
+
+/** Drafts, scheduled and sent announcements (lifecycle in `status`). */
+export const announcements = pgTable(
+  'announcements',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    title: text('title').notNull().default(''),
+    body: text('body').notNull().default(''),
+    /** 'plain' | 'embed'. */
+    format: text('format').notNull().default('plain'),
+    targetChannelId: text('target_channel_id'),
+    imageUrl: text('image_url'),
+    cardTemplateId: uuid('card_template_id'),
+    embedColor: text('embed_color'),
+    footer: text('footer'),
+    /** 'none' | 'here' | 'everyone' | 'roles'. */
+    mentionMode: text('mention_mode').notNull().default('none'),
+    mentionRoleIds: jsonb('mention_role_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    buttons: jsonb('buttons').notNull().default(sql`'[]'::jsonb`),
+    status: announcementStatus('status').notNull().default('draft'),
+    /** True for reusable templates (not delivered). */
+    isTemplate: boolean('is_template').notNull().default(false),
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    sentMessageId: text('sent_message_id'),
+    failureReason: text('failure_reason'),
+    createdBy: text('created_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('announcements_guild_idx').on(table.guildId),
+    index('announcements_status_idx').on(table.status),
+    index('announcements_scheduled_idx').on(table.scheduledFor),
+  ]
+);
+
+// --- Dynamic cards ---------------------------------------------------------
+
+/** Reusable image templates (welcome cards, birthday cards, banners …). */
+export const cardTemplates = pgTable(
+  'card_templates',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    /** Null = global template available to all guilds. */
+    guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** 'welcome' | 'birthday' | 'announcement' | 'role_unlock' | 'event' | 'generic'. */
+    kind: text('kind').notNull().default('generic'),
+    width: integer('width').notNull().default(1000),
+    height: integer('height').notNull().default(420),
+    /** Layout spec: background, text layers, avatar placement, fonts. Sanitized. */
+    layout: jsonb('layout').notNull().default(sql`'{}'::jsonb`),
+    backgroundAssetId: uuid('background_asset_id'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('card_templates_guild_idx').on(table.guildId)]
+);
+
+/** Uploaded background images and other card assets (stored on disk volume). */
+export const cardAssets = pgTable(
+  'card_assets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'cascade' }),
+    /** Relative path within the uploads volume — never an absolute host path. */
+    storagePath: text('storage_path').notNull(),
+    originalName: text('original_name').notNull().default(''),
+    mimeType: text('mime_type').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('card_assets_guild_idx').on(table.guildId)]
+);
+
+// --- Welcome / leave -------------------------------------------------------
+
+export const welcomeSettings = pgTable('welcome_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  welcomeEnabled: boolean('welcome_enabled').notNull().default(false),
+  leaveEnabled: boolean('leave_enabled').notNull().default(false),
+  welcomeChannelId: text('welcome_channel_id'),
+  leaveChannelId: text('leave_channel_id'),
+  welcomeMessage: text('welcome_message').notNull().default('Welcome {{user.mention}} to {{server.name}}!'),
+  leaveMessage: text('leave_message').notNull().default('{{user.username}} has left the server.'),
+  welcomeCardTemplateId: uuid('welcome_card_template_id'),
+  dmEnabled: boolean('dm_enabled').notNull().default(false),
+  dmMessage: text('dm_message').notNull().default(''),
+  autoRoleIds: jsonb('auto_role_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  rulesChannelId: text('rules_channel_id'),
+  delaySeconds: integer('delay_seconds').notNull().default(0),
+  logChannelId: text('log_channel_id'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Self-assignable roles -------------------------------------------------
+
+export const roleMenus = pgTable(
+  'role_menus',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    type: roleMenuType('type').notNull().default('button'),
+    mode: roleMenuMode('mode').notNull().default('multiple'),
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    /** 'plain' | 'embed' | 'card'. */
+    style: text('style').notNull().default('embed'),
+    title: text('title').notNull().default('Select your roles'),
+    description: text('description').notNull().default(''),
+    /** Mode constraints: maxSelections, requiredRoleId, blockedRoleId, tempDurationSeconds. */
+    constraints: jsonb('constraints').notNull().default(sql`'{}'::jsonb`),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('role_menus_guild_idx').on(table.guildId),
+    index('role_menus_message_idx').on(table.messageId),
+  ]
+);
+
+export const roleMenuOptions = pgTable(
+  'role_menu_options',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    menuId: uuid('menu_id')
+      .notNull()
+      .references(() => roleMenus.id, { onDelete: 'cascade' }),
+    roleId: text('role_id').notNull(),
+    label: text('label').notNull().default(''),
+    description: text('description').notNull().default(''),
+    emoji: text('emoji'),
+    position: integer('position').notNull().default(0),
+  },
+  (table) => [index('role_menu_options_menu_idx').on(table.menuId)]
+);
+
+export const roleAssignmentLogs = pgTable(
+  'role_assignment_logs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    menuId: uuid('menu_id').references(() => roleMenus.id, { onDelete: 'set null' }),
+    userExternalId: text('user_external_id').notNull(),
+    roleId: text('role_id').notNull(),
+    /** 'added' | 'removed'. */
+    action: text('action').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('role_assignment_logs_guild_idx').on(table.guildId)]
+);
+
+// --- Birthdays & reminders -------------------------------------------------
+
+/** Opt-in only. Year optional (month/day-only birthdays supported). */
+export const birthdays = pgTable(
+  'birthdays',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    month: integer('month').notNull(),
+    day: integer('day').notNull(),
+    year: integer('year'),
+    timezone: text('timezone').notNull().default('UTC'),
+    /** 'public' | 'members' | 'private'. */
+    visibility: text('visibility').notNull().default('members'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('birthdays_guild_user_idx').on(table.guildId, table.userExternalId),
+    index('birthdays_month_day_idx').on(table.month, table.day),
+  ]
+);
+
+export const birthdaySettings = pgTable('birthday_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(false),
+  announcementChannelId: text('announcement_channel_id'),
+  message: text('message').notNull().default('🎉 Happy birthday {{user.mention}}!'),
+  cardTemplateId: uuid('card_template_id'),
+  roleEnabled: boolean('role_enabled').notNull().default(false),
+  roleId: text('role_id'),
+  roleDurationHours: integer('role_duration_hours').notNull().default(24),
+  announceHour: integer('announce_hour').notNull().default(9),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const birthdayAnnouncements = pgTable(
+  'birthday_announcements',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    announcedOn: text('announced_on').notNull(), // YYYY-MM-DD in the guild's processing
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('birthday_announcements_unique_idx').on(
+      table.guildId,
+      table.userExternalId,
+      table.announcedOn
+    ),
+  ]
+);
+
+export const reminders = pgTable(
+  'reminders',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    /** 'dm' | 'channel'. */
+    deliveryType: text('delivery_type').notNull().default('dm'),
+    channelId: text('channel_id'),
+    message: text('message').notNull(),
+    timezone: text('timezone').notNull().default('UTC'),
+    dueAt: timestamp('due_at', { withTimezone: true }).notNull(),
+    /** Null = one-off; otherwise interval in seconds for recurrence. */
+    recurrenceSeconds: integer('recurrence_seconds'),
+    mentionRoleIds: jsonb('mention_role_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    active: boolean('active').notNull().default(true),
+    createdByAdmin: boolean('created_by_admin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('reminders_due_idx').on(table.dueAt),
+    index('reminders_user_idx').on(table.userExternalId),
+  ]
+);
+
+// --- Scheduled messages ----------------------------------------------------
+
+export const scheduledMessages = pgTable(
+  'scheduled_messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    name: text('name').notNull().default(''),
+    channelId: text('channel_id').notNull(),
+    content: text('content').notNull().default(''),
+    /** 'plain' | 'embed'. */
+    format: text('format').notNull().default('plain'),
+    embedConfig: jsonb('embed_config').notNull().default(sql`'{}'::jsonb`),
+    mentionMode: text('mention_mode').notNull().default('none'),
+    mentionRoleIds: jsonb('mention_role_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    scheduleType: scheduleType('schedule_type').notNull().default('once'),
+    /** cron expr / interval seconds / time-of-day, depending on scheduleType. */
+    scheduleConfig: jsonb('schedule_config').notNull().default(sql`'{}'::jsonb`),
+    timezone: text('timezone').notNull().default('UTC'),
+    nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+    paused: boolean('paused').notNull().default(false),
+    lastFailureReason: text('last_failure_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('scheduled_messages_guild_idx').on(table.guildId),
+    index('scheduled_messages_next_run_idx').on(table.nextRunAt),
+  ]
+);
+
+export const scheduledMessageRuns = pgTable(
+  'scheduled_message_runs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    scheduledMessageId: uuid('scheduled_message_id')
+      .notNull()
+      .references(() => scheduledMessages.id, { onDelete: 'cascade' }),
+    /** 'sent' | 'failed' | 'skipped'. */
+    status: text('status').notNull(),
+    detail: text('detail'),
+    ranAt: timestamp('ran_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('scheduled_message_runs_msg_idx').on(table.scheduledMessageId)]
+);
+
+// --- Moderation cases ------------------------------------------------------
+
+/** A numbered moderation case per guild (case_number is per-guild sequential). */
+export const moderationCases = pgTable(
+  'moderation_cases',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    caseNumber: integer('case_number').notNull(),
+    actionType: moderationActionType('action_type').notNull(),
+    targetUserExternalId: text('target_user_external_id').notNull(),
+    moderatorExternalId: text('moderator_external_id').notNull().default(''),
+    reason: text('reason').notNull().default(''),
+    status: moderationCaseStatus('status').notNull().default('open'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('moderation_cases_guild_number_idx').on(table.guildId, table.caseNumber),
+    index('moderation_cases_target_idx').on(table.guildId, table.targetUserExternalId),
+    index('moderation_cases_created_idx').on(table.createdAt),
+  ]
+);
+
+export const moderationSettings = pgTable('moderation_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  logChannelId: text('log_channel_id'),
+  /** 'timeout' (native) | 'role'. */
+  muteStrategy: text('mute_strategy').notNull().default('timeout'),
+  muteRoleId: text('mute_role_id'),
+  dmOnAction: boolean('dm_on_action').notNull().default(true),
+  /** Per-command enablement + required permission overrides. */
+  commandConfig: jsonb('command_config').notNull().default(sql`'{}'::jsonb`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Auto-moderation -------------------------------------------------------
+
+export const automodRules = pgTable(
+  'automod_rules',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    ruleType: automodRuleType('rule_type').notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    /** type-specific: word list, thresholds, timeframe seconds, link allowlist… */
+    config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+    action: automodAction('action').notNull().default('log_only'),
+    severity: integer('severity').notNull().default(1),
+    ignoredChannelIds: jsonb('ignored_channel_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    ignoredRoleIds: jsonb('ignored_role_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Escalate after N violations within the timeframe. */
+    escalationThreshold: integer('escalation_threshold'),
+    escalationAction: automodAction('escalation_action'),
+    responseMessage: text('response_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('automod_rules_guild_idx').on(table.guildId)]
+);
+
+export const automodViolations = pgTable(
+  'automod_violations',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    ruleId: uuid('rule_id').references(() => automodRules.id, { onDelete: 'set null' }),
+    userExternalId: text('user_external_id').notNull(),
+    channelId: text('channel_id'),
+    ruleType: automodRuleType('rule_type').notNull(),
+    actionTaken: automodAction('action_taken').notNull(),
+    detail: text('detail'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('automod_violations_guild_idx').on(table.guildId),
+    index('automod_violations_user_idx').on(table.guildId, table.userExternalId),
+  ]
+);
+
+// --- Custom commands -------------------------------------------------------
+
+export const customCommands = pgTable(
+  'custom_commands',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    /** Invocation name without prefix (slash) — unique per guild. */
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    responseType: customCommandResponseType('response_type').notNull().default('text'),
+    /** text/embed/link config or a list of responses for 'random'. */
+    response: jsonb('response').notNull().default(sql`'{}'::jsonb`),
+    allowedRoleIds: jsonb('allowed_role_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    allowedChannelIds: jsonb('allowed_channel_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    enabled: boolean('enabled').notNull().default(true),
+    cooldownSeconds: integer('cooldown_seconds').notNull().default(0),
+    useCount: integer('use_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('custom_commands_guild_name_idx').on(table.guildId, table.name)]
+);

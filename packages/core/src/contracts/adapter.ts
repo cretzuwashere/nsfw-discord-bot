@@ -2,6 +2,7 @@ import type { AppConfig } from '@botplatform/config';
 import type { Logger } from '@botplatform/logger';
 import type { AdapterConnectionState } from '@botplatform/shared';
 import type { CommandDefinition, CommandDispatcher } from './commands.js';
+import type { EventDispatcher } from '../registry.js';
 import type { AuditLogPort } from './ports.js';
 
 export interface AdapterContext {
@@ -12,6 +13,8 @@ export interface AdapterContext {
   commands: CommandDefinition[];
   /** Route an incoming invocation through the platform (enabled-checks, error boundary). */
   dispatch: CommandDispatcher;
+  /** Route an adapter-neutral platform event to subscribed modules. */
+  dispatchEvent: EventDispatcher;
 }
 
 export interface AdapterStatus {

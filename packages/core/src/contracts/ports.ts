@@ -4,12 +4,16 @@
  */
 
 export type AuditActorType = 'admin' | 'system' | 'adapter' | 'platform_user';
+export type AuditSeverity = 'info' | 'notice' | 'warning' | 'critical';
 
 export interface AuditEntry {
   actorType: AuditActorType;
   actorId?: string | undefined;
   /** Dotted action key, e.g. 'audio.command.play', 'admin.login', 'system.startup'. */
   action: string;
+  /** Owning module key (e.g. 'announcements'); omit for platform-level events. */
+  moduleKey?: string | undefined;
+  severity?: AuditSeverity | undefined;
   guildId?: string | undefined;
   targetType?: string | undefined;
   targetId?: string | undefined;

@@ -1,4 +1,4 @@
-import { desc, like, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, like, sql, type SQL } from 'drizzle-orm';
 import type { AuditEntry } from '@botplatform/core';
 import type { Db } from '../client.js';
 import { auditLogs } from '../schema.js';
@@ -12,6 +12,8 @@ export function createAuditLogsRepo(db: Db) {
         actorType: entry.actorType,
         actorId: entry.actorId ?? null,
         action: entry.action.slice(0, 200),
+        moduleKey: entry.moduleKey ?? null,
+        severity: entry.severity ?? 'info',
         guildId: entry.guildId ?? null,
         targetType: entry.targetType ?? null,
         targetId: entry.targetId ?? null,
@@ -19,11 +21,11 @@ export function createAuditLogsRepo(db: Db) {
       });
     },
 
-    async listRecent(options: { limit?: number; offset?: number; action?: string } = {}): Promise<
+    async listRecent(options: AuditFilter & { limit?: number; offset?: number } = {}): Promise<
       AuditLogRow[]
     > {
       const limit = Math.min(options.limit ?? 50, 200);
-      const where = actionFilter(options.action);
+      const where = buildFilter(options);
       const query = db
         .select()
         .from(auditLogs)
@@ -33,8 +35,8 @@ export function createAuditLogsRepo(db: Db) {
       return where ? query.where(where) : query;
     },
 
-    async count(options: { action?: string } = {}): Promise<number> {
-      const where = actionFilter(options.action);
+    async count(options: AuditFilter = {}): Promise<number> {
+      const where = buildFilter(options);
       const base = db.select({ value: sql<number>`count(*)::int` }).from(auditLogs);
       const rows = await (where ? base.where(where) : base);
       return rows[0]?.value ?? 0;
@@ -42,11 +44,29 @@ export function createAuditLogsRepo(db: Db) {
   };
 }
 
-/** Substring match on the action key (e.g. 'admin' finds 'admin.login'). */
-function actionFilter(action: string | undefined): SQL | undefined {
-  if (!action) return undefined;
-  const escaped = action.replace(/[\\%_]/g, (char) => `\\${char}`);
-  return like(auditLogs.action, `%${escaped}%`);
+export interface AuditFilter {
+  action?: string | undefined;
+  moduleKey?: string | undefined;
+  severity?: string | undefined;
+  actorId?: string | undefined;
+}
+
+/** Combine the optional filter dimensions into a single WHERE clause. */
+function buildFilter(options: AuditFilter): SQL | undefined {
+  const clauses: SQL[] = [];
+  if (options.action) {
+    const escaped = options.action.replace(/[\\%_]/g, (char) => `\\${char}`);
+    clauses.push(like(auditLogs.action, `%${escaped}%`));
+  }
+  if (options.moduleKey) clauses.push(eq(auditLogs.moduleKey, options.moduleKey));
+  if (options.severity) {
+    clauses.push(
+      eq(auditLogs.severity, options.severity as (typeof auditLogs.severity.enumValues)[number])
+    );
+  }
+  if (options.actorId) clauses.push(eq(auditLogs.actorId, options.actorId));
+  if (clauses.length === 0) return undefined;
+  return clauses.length === 1 ? clauses[0] : and(...clauses);
 }
 
 /** Defensive: metadata must be JSON-serializable and free of obvious secrets. */

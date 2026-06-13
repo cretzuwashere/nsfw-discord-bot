@@ -118,6 +118,10 @@ COPY --from=builder /app/apps/bot/dist ./dist
 COPY --from=builder /app/packages/database/migrations ./migrations
 ENV MIGRATIONS_DIR=/app/migrations
 
+# Writable uploads dir for generated/uploaded card assets (volume mount point).
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+ENV UPLOADS_DIR=/app/uploads
+
 USER node
 EXPOSE 8081
 # Shell form on purpose: ${HEALTH_PORT} expands at runtime inside the
@@ -136,6 +140,9 @@ COPY --from=builder /app/apps/admin/dist ./dist
 # EJS templates and static assets are served from disk, not bundled.
 COPY --from=builder /app/apps/admin/views ./views
 COPY --from=builder /app/apps/admin/public ./public
+
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+ENV UPLOADS_DIR=/app/uploads
 
 USER node
 EXPOSE 3000

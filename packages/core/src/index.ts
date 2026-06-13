@@ -1,5 +1,7 @@
 export * from './contracts/adapter.js';
 export * from './contracts/commands.js';
+export * from './contracts/events.js';
+export * from './contracts/guild-service.js';
 export * from './contracts/module.js';
 export * from './contracts/ports.js';
 export * from './contracts/voice.js';
@@ -7,3 +9,4 @@ export * from './health.js';
 export * from './kernel.js';
 export * from './module-state.js';
 export * from './registry.js';
+export * from './scheduler.js';

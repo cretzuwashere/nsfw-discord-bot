@@ -1,13 +1,22 @@
 import type { Logger } from '@botplatform/logger';
 import { PlatformError, toSafeUserMessage } from '@botplatform/shared';
 import type { CommandContext, CommandDefinition, CommandDispatcher } from './contracts/commands.js';
-import type { BotModule } from './contracts/module.js';
+import type { PlatformEvent } from './contracts/events.js';
+import type { BotModule, ModuleEventHandler } from './contracts/module.js';
 import type { AuditLogPort, ModuleStatePort } from './contracts/ports.js';
 
 interface RegisteredCommand {
   module: BotModule;
   command: CommandDefinition;
 }
+
+interface RegisteredEvent {
+  module: BotModule;
+  handler: ModuleEventHandler;
+}
+
+/** Dispatches an adapter-neutral platform event to subscribed modules. */
+export type EventDispatcher = (event: PlatformEvent) => Promise<void>;
 
 /**
  * Holds all registered modules and routes command invocations to them,
@@ -18,6 +27,7 @@ interface RegisteredCommand {
 export class ModuleRegistry {
   private readonly modules = new Map<string, BotModule>();
   private readonly commands = new Map<string, RegisteredCommand>();
+  private readonly events: RegisteredEvent[] = [];
 
   register(module: BotModule): void {
     if (this.modules.has(module.key)) {
@@ -33,6 +43,9 @@ export class ModuleRegistry {
       }
       this.commands.set(command.name, { module, command });
     }
+    for (const handler of module.events ?? []) {
+      this.events.push({ module, handler });
+    }
   }
 
   list(): BotModule[] {
@@ -45,6 +58,34 @@ export class ModuleRegistry {
 
   allCommands(): CommandDefinition[] {
     return [...this.commands.values()].map((entry) => entry.command);
+  }
+
+  /**
+   * Build an event dispatcher: routes a platform event to every subscribed
+   * module whose module is enabled, isolating handler failures so one
+   * module's error can't break others or the adapter.
+   */
+  createEventDispatcher(deps: {
+    logger: Logger;
+    moduleState: ModuleStatePort;
+  }): EventDispatcher {
+    const { logger, moduleState } = deps;
+    return async (event: PlatformEvent): Promise<void> => {
+      const handlers = this.events.filter((entry) => entry.handler.type === event.type);
+      await Promise.all(
+        handlers.map(async (entry) => {
+          try {
+            if (!(await moduleState.isEnabled(entry.module.key))) return;
+            await entry.handler.handle(event as never);
+          } catch (error) {
+            logger.error(
+              { err: error, module: entry.module.key, event: event.type },
+              'module event handler failed'
+            );
+          }
+        })
+      );
+    };
   }
 
   findCommand(name: string): RegisteredCommand | undefined {

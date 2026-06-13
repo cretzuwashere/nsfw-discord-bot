@@ -13,6 +13,11 @@ const envSchema = z.object({
   DISCORD_TOKEN: z.string().optional().default(''),
   DISCORD_CLIENT_ID: z.string().optional().default(''),
   DISCORD_GUILD_ID: z.string().optional().default(''),
+  DISCORD_ENABLE_MESSAGE_CONTENT: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((v) => v.toLowerCase() === 'true'),
 
   ADMIN_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   PUBLIC_ADMIN_URL: z.string().default('http://localhost:3000'),
@@ -42,6 +47,9 @@ const envSchema = z.object({
     .transform((v) => v.toLowerCase() !== 'false'),
   YTDLP_PATH: z.string().optional().default('yt-dlp'),
 
+  /** Directory for uploaded card assets (a persistent Docker volume). */
+  UPLOADS_DIR: z.string().optional().default('/workspace/uploads'),
+
   BUILD_VERSION: z.string().optional().default('0.1.0'),
 });
 
@@ -61,6 +69,8 @@ export interface AppConfig {
     token: string;
     clientId: string;
     guildId: string;
+    /** Privileged MessageContent intent — required by content-based automod. */
+    enableMessageContent: boolean;
   };
   admin: {
     port: number;
@@ -84,6 +94,10 @@ export interface AppConfig {
     /** YouTube/SoundCloud/Spotify providers (yt-dlp based). */
     enableStreamingSources: boolean;
     ytdlpPath: string;
+  };
+  /** Filesystem paths (persistent volumes). */
+  storage: {
+    uploadsDir: string;
   };
 }
 
@@ -112,6 +126,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       token: e.DISCORD_TOKEN,
       clientId: e.DISCORD_CLIENT_ID,
       guildId: e.DISCORD_GUILD_ID,
+      enableMessageContent: e.DISCORD_ENABLE_MESSAGE_CONTENT,
     },
     admin: {
       port: e.ADMIN_PORT,
@@ -133,6 +148,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       requestTimeoutMs: e.AUDIO_REQUEST_TIMEOUT_MS,
       enableStreamingSources: e.AUDIO_ENABLE_STREAMING_SOURCES,
       ytdlpPath: e.YTDLP_PATH,
+    },
+    storage: {
+      uploadsDir: e.UPLOADS_DIR,
     },
   };
 }
