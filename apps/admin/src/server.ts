@@ -11,6 +11,7 @@ import {
   type Db,
 } from '@botplatform/database';
 import type { Logger } from '@botplatform/logger';
+import { createModerationCasesRepo } from '@botplatform/moderation-module';
 import { verifyPassword } from '@botplatform/security';
 import csrfProtection from '@fastify/csrf-protection';
 import formbody from '@fastify/formbody';
@@ -381,12 +382,16 @@ export async function buildAdminServer(deps: AdminDeps): Promise<FastifyInstance
     }
   );
 
+  const moderationCases = createModerationCasesRepo(db);
   app.get('/moderation', { preHandler: requireAuth }, async (request, reply) => {
-    const [moduleRow, warnings, actions, rules] = await Promise.all([
+    const guildList = await guilds.list();
+    const guildId = (request.query as Record<string, string>)['guild'] ?? guildList[0]?.id ?? null;
+    const [moduleRow, warnings, actions, rules, cases] = await Promise.all([
       modules.get('moderation'),
       moderation.listWarnings(50),
       moderation.listActions(50),
       moderation.listRules(),
+      guildId ? moderationCases.listByGuild(guildId, 50) : Promise.resolve([]),
     ]);
     return reply.view('moderation', {
       ...pageLocals(request, reply, 'Moderation'),
@@ -394,6 +399,9 @@ export async function buildAdminServer(deps: AdminDeps): Promise<FastifyInstance
       warnings,
       actions,
       rules,
+      cases,
+      guilds: guildList,
+      selectedGuildId: guildId,
     });
   });
 

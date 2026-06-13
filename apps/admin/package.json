@@ -12,6 +12,7 @@
   "dependencies": {
     "@botplatform/announcements-module": "workspace:*",
     "@botplatform/cards-module": "workspace:*",
+    "@botplatform/moderation-module": "workspace:*",
     "@botplatform/welcome-module": "workspace:*",
     "@botplatform/role-menus-module": "workspace:*",
     "@botplatform/scheduled-messages-module": "workspace:*",

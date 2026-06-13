@@ -8,7 +8,7 @@ import type {
   SentMessageRef,
 } from '@botplatform/core';
 import type { Logger } from '@botplatform/logger';
-import { PlatformError } from '@botplatform/shared';
+import { PlatformError, UserFacingError } from '@botplatform/shared';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -153,11 +153,11 @@ export class DiscordGuildService implements GuildService {
     reason?: string
   ): Promise<void> {
     if (!(await this.canManageRole(roleId))) {
-      throw new PlatformError('PERMISSION_DENIED', 'I cannot manage that role (hierarchy/permission).');
+      throw new UserFacingError('PERMISSION_DENIED', 'I cannot manage that role (check my role hierarchy and permissions).');
     }
     const guild = await this.guild();
     const member = await guild.members.fetch(userExternalId).catch(() => null);
-    if (!member) throw new PlatformError('NOT_FOUND', 'member not found');
+    if (!member) throw new UserFacingError('NOT_FOUND', 'That member is not in this server.');
     try {
       if (op === 'add') await member.roles.add(roleId, reason);
       else await member.roles.remove(roleId, reason);
@@ -169,7 +169,7 @@ export class DiscordGuildService implements GuildService {
   async timeoutMember(userExternalId: string, durationSeconds: number, reason?: string): Promise<void> {
     const guild = await this.guild();
     const member = await guild.members.fetch(userExternalId).catch(() => null);
-    if (!member) throw new PlatformError('NOT_FOUND', 'member not found');
+    if (!member) throw new UserFacingError('NOT_FOUND', 'That member is not in this server.');
     try {
       await member.timeout(durationSeconds * 1000, reason);
     } catch (error) {
@@ -180,7 +180,7 @@ export class DiscordGuildService implements GuildService {
   async removeTimeout(userExternalId: string, reason?: string): Promise<void> {
     const guild = await this.guild();
     const member = await guild.members.fetch(userExternalId).catch(() => null);
-    if (!member) throw new PlatformError('NOT_FOUND', 'member not found');
+    if (!member) throw new UserFacingError('NOT_FOUND', 'That member is not in this server.');
     try {
       await member.timeout(null, reason);
     } catch (error) {
@@ -191,8 +191,8 @@ export class DiscordGuildService implements GuildService {
   async kickMember(userExternalId: string, reason?: string): Promise<void> {
     const guild = await this.guild();
     const member = await guild.members.fetch(userExternalId).catch(() => null);
-    if (!member) throw new PlatformError('NOT_FOUND', 'member not found');
-    if (!member.kickable) throw new PlatformError('PERMISSION_DENIED', 'I cannot kick that member.');
+    if (!member) throw new UserFacingError('NOT_FOUND', 'That member is not in this server.');
+    if (!member.kickable) throw new UserFacingError('PERMISSION_DENIED', 'I cannot kick that member.');
     try {
       await member.kick(reason);
     } catch (error) {

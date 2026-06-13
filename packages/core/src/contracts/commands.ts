@@ -4,7 +4,8 @@ import type { VoiceCapability } from './voice.js';
 export interface CommandOptionDef {
   name: string;
   description: string;
-  type: 'string' | 'integer' | 'boolean';
+  /** 'user'/'channel' deliver the selected entity's id as a string option. */
+  type: 'string' | 'integer' | 'boolean' | 'user' | 'channel';
   required?: boolean;
 }
 
@@ -54,6 +55,12 @@ export interface CommandDefinition {
   subcommands?: SubcommandDefinition[];
   /** True when the command only makes sense inside a guild/server. */
   guildOnly?: boolean;
+  /**
+   * Discord permission names that gate visibility/use (default_member_permissions).
+   * E.g. ['KickMembers']. The platform still re-checks the bot's own
+   * permissions before acting.
+   */
+  defaultMemberPermissions?: string[];
   execute?(ctx: CommandContext): Promise<void>;
 }
 

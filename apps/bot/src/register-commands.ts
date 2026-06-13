@@ -36,7 +36,13 @@ async function main(): Promise<void> {
   // Modules are built only to collect their command definitions; nothing is
   // executed, so the no-op guild provider is fine.
   const audio = createAudioModule({ config, logger, playback: null });
-  const moderation = createModerationModule({ config, logger, db: null });
+  const moderation = createModerationModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
   const announcements = createAnnouncementsModule({
     config,
     logger,

@@ -173,6 +173,9 @@ importers:
       '@botplatform/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@botplatform/moderation-module':
+        specifier: workspace:*
+        version: link:../../packages/moderation-module
       '@botplatform/role-menus-module':
         specifier: workspace:*
         version: link:../../packages/role-menus-module
@@ -236,7 +239,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
 
   apps/bot:
     dependencies:
@@ -309,7 +312,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(tsx@4.22.4))
 
   packages/announcements-module:
     dependencies:

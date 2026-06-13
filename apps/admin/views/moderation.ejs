@@ -17,6 +17,30 @@
   See <code>docs/MODERATION_ROADMAP.md</code>.</p>
 </section>
 
+<section class="card">
+  <h2>Moderation cases</h2>
+  <% if (!cases || cases.length === 0) { %>
+    <p class="muted">No moderation cases recorded. Use <code>/warn</code>, <code>/timeout</code>,
+    <code>/kick</code>, <code>/ban</code>, <code>/purge</code> etc. in Discord.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>#</th><th>Time</th><th>Action</th><th>Target</th><th>Moderator</th><th>Reason</th></tr></thead>
+      <tbody>
+        <% for (const c of cases) { %>
+          <tr>
+            <td><%= c.caseNumber %></td>
+            <td class="nowrap muted small"><%= c.createdAt.toISOString().slice(0,16).replace('T',' ') %></td>
+            <td><code><%= c.actionType %></code></td>
+            <td class="muted small"><%= c.targetUserExternalId %></td>
+            <td class="muted small"><%= c.moderatorExternalId %></td>
+            <td><%= c.reason %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+
 <div class="grid">
   <section class="card">
     <h2>Warnings</h2>

@@ -1,9 +1,11 @@
 import type { AppConfig } from '@botplatform/config';
-import type { AuditLogPort, BotModule } from '@botplatform/core';
+import type { AuditLogPort, BotModule, CommandDefinition, GuildServiceProvider } from '@botplatform/core';
 import type { Db } from '@botplatform/database';
 import { createGuildsRepo, createModerationRepo } from '@botplatform/database';
 import type { Logger } from '@botplatform/logger';
 import { MODULE_KEYS } from '@botplatform/shared';
+import { createModerationCasesRepo, type ModerationCasesRepo } from './cases-repo.js';
+import { buildModerationCommands } from './commands.js';
 import type { ModerationServices } from './services/index.js';
 import { createModerationServices } from './services/index.js';
 import { createPermissionsRepo } from './services/permissions-repo.js';
@@ -19,11 +21,14 @@ export interface ModerationModuleOptions {
    * audit log (createDbAuditLog from @botplatform/database) in production.
    */
   audit?: AuditLogPort;
+  /** Required to expose moderation slash commands (kick/ban/timeout/…). */
+  guildServiceProvider?: GuildServiceProvider;
 }
 
 export interface ModerationModuleHandle {
   module: BotModule;
   services: ModerationServices | null;
+  cases: ModerationCasesRepo | null;
 }
 
 const NOOP_AUDIT: AuditLogPort = {
@@ -42,23 +47,44 @@ export function createModerationModule(options: ModerationModuleOptions): Modera
       })
     : null;
 
+  const cases = options.db ? createModerationCasesRepo(options.db) : null;
+
+  let commands: CommandDefinition[] = [];
+  if (options.db && options.guildServiceProvider && services && cases) {
+    commands = buildModerationCommands({
+      cases,
+      guilds: createGuildsRepo(options.db),
+      warnings: services.warnings,
+      guildServiceProvider: options.guildServiceProvider,
+      audit,
+    });
+  }
+
   const module: BotModule = {
     key: MODULE_KEYS.moderation,
     name: 'Moderation',
     description:
-      'Moderation: warnings, action records, rules and role permission mappings. ' +
-      'Slash commands arrive in later phases — see docs/MODERATION_ROADMAP.md.',
-    commands: [],
+      'Moderation commands (warn, timeout, kick, ban, purge, slowmode, lock) with case logging.',
+    metadata: {
+      requiredPermissions: ['ModerateMembers', 'KickMembers', 'BanMembers', 'ManageMessages', 'ManageChannels'],
+      requiredIntents: ['Guilds', 'GuildModeration'],
+      auditEvents: ['moderation.warn', 'moderation.mute', 'moderation.kick', 'moderation.ban', 'moderation.purge'],
+    },
+    commands,
     onLoad(ctx) {
       ctx.logger.info(
-        { persistence: services ? 'database' : 'unavailable', commands: 0 },
-        'moderation foundation ready'
+        { persistence: services ? 'database' : 'unavailable', commands: commands.length },
+        'moderation module ready'
       );
     },
   };
 
-  return { module, services };
+  return { module, services, cases };
 }
+
+export { createModerationCasesRepo } from './cases-repo.js';
+export type { ModerationCasesRepo, ModerationCaseRow, ModerationSettingsRow } from './cases-repo.js';
+export { buildModerationCommands } from './commands.js';
 
 export type { ModerationServiceDeps, ModerationRepoPort, GuildsRepoPort, PermissionsRepoPort } from './services/deps.js';
 export { createModerationServices } from './services/index.js';

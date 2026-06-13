@@ -45,6 +45,7 @@ async function main(): Promise<void> {
     logger,
     db: database.db,
     audit,
+    guildServiceProvider: adapter,
   });
   // The adapter implements GuildServiceProvider — community modules send
   // messages and manage roles through it.
