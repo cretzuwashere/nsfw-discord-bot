@@ -1,0 +1,34 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Custom Commands</h1>
+<% if (message) { %><div class="alert alert-ok" role="status"><%= message.replace(/\+/g, ' ') %></div><% } %>
+
+<section class="card">
+  <p><a class="btn btn-primary" href="/custom-commands/new">New custom command</a></p>
+  <% if (guilds.length === 0) { %>
+    <p class="muted">No servers yet.</p>
+  <% } else if (commands.length === 0) { %>
+    <p class="muted">No custom commands yet. Members run them with <code>/custom name:&lt;name&gt;</code>.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Uses</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% for (const c of commands) { %>
+          <tr>
+            <td><a href="/custom-commands/<%= c.id %>"><code><%= c.name %></code></a></td>
+            <td><%= c.responseType %></td>
+            <td class="muted small"><%= c.useCount %></td>
+            <td><span class="badge badge-<%= c.enabled ? 'ok' : 'muted' %>"><%= c.enabled ? 'Enabled' : 'Disabled' %></span></td>
+            <td>
+              <form method="post" action="/custom-commands/<%= c.id %>/delete" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-warn">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

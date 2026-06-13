@@ -1,0 +1,51 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const c = command || {}; const isNew = !c.id; const r = c.response || {}; %>
+<h1><%= isNew ? 'New Custom Command' : 'Edit Custom Command' %></h1>
+<% for (const error of (errors || [])) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+
+<section class="card">
+  <form method="post" action="/custom-commands/<%= c.id || 'new' %>/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId">
+      <% for (const g of guilds) { %><option value="<%= g.id %>" <%= c.guildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option><% } %>
+    </select>
+
+    <label for="name">Command name (lowercase, run as <code>/custom name:&lt;name&gt;</code>)</label>
+    <input id="name" name="name" type="text" value="<%= c.name || '' %>" required>
+    <label for="description">Description</label>
+    <input id="description" name="description" type="text" value="<%= c.description || '' %>">
+
+    <label for="responseType">Response type</label>
+    <select id="responseType" name="responseType">
+      <% for (const ty of ['text','embed','random','link']) { %><option value="<%= ty %>" <%= c.responseType === ty ? 'selected' : '' %>><%= ty %></option><% } %>
+    </select>
+
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.5rem 1rem;margin-top:1rem">
+      <legend class="muted small">Response (fill what applies to the type)</legend>
+      <label for="text">Text / Link text</label>
+      <textarea id="text" name="text" rows="2"><%= r.text || '' %></textarea>
+      <label for="title">Embed title</label>
+      <input id="title" name="title" type="text" value="<%= r.title || '' %>">
+      <label for="description_body">Embed description</label>
+      <textarea id="description_body" name="description_body" rows="2"><%= r.description || '' %></textarea>
+      <label for="choices">Random choices (one per line)</label>
+      <textarea id="choices" name="choices" rows="3"><%= Array.isArray(r.choices) ? r.choices.join('\n') : '' %></textarea>
+      <label for="url">Link URL</label>
+      <input id="url" name="url" type="text" value="<%= r.url || '' %>">
+      <label for="label">Link button label</label>
+      <input id="label" name="label" type="text" value="<%= r.label || '' %>">
+    </fieldset>
+
+    <label for="allowedChannelIds">Allowed channel IDs (optional, comma-separated)</label>
+    <input id="allowedChannelIds" name="allowedChannelIds" type="text" value="<%= Array.isArray(c.allowedChannelIds) ? c.allowedChannelIds.join(', ') : '' %>">
+    <label for="cooldownSeconds">Per-user cooldown (seconds)</label>
+    <input id="cooldownSeconds" name="cooldownSeconds" type="number" min="0" max="86400" value="<%= c.cooldownSeconds ?? 0 %>">
+
+    <p class="muted small">Placeholders: <code>{{user.username}}</code>, <code>{{user.mention}}</code>, <code>{{server.name}}</code>.</p>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-ghost" href="/custom-commands">Back</a>
+  </form>
+</section>
+<%- include('partials/footer') %>

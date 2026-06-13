@@ -1,6 +1,7 @@
 import type { AdminRoutePlugin } from './context.js';
 import { registerAnnouncementRoutes } from './announcements.js';
 import { registerCardsRoutes } from './cards.js';
+import { registerCustomCommandRoutes } from './custom-commands.js';
 import { registerPlaceholderRoutes } from './placeholders.js';
 import { registerRoleMenuRoutes } from './role-menus.js';
 import { registerScheduledMessageRoutes } from './scheduled-messages.js';
@@ -17,6 +18,7 @@ export const COMMUNITY_ROUTE_PLUGINS: AdminRoutePlugin[] = [
   registerWelcomeRoutes,
   registerRoleMenuRoutes,
   registerScheduledMessageRoutes,
+  registerCustomCommandRoutes,
   registerPlaceholderRoutes,
 ];
 
