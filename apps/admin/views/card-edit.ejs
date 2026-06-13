@@ -1,0 +1,61 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const t = template || {}; const isNew = !t.id;
+   const layoutJson = t.layout ? JSON.stringify(t.layout, null, 2) : JSON.stringify({
+     background: { type: 'color', color: '#1f2530' },
+     avatar: { x: 40, y: 40, size: 128, shape: 'circle' },
+     texts: [
+       { content: 'Welcome {{user.username}}!', x: 200, y: 90, fontSize: 40, color: '#ffffff', weight: 'bold', anchor: 'start' },
+       { content: 'Member #{{server.memberCount}}', x: 200, y: 140, fontSize: 24, color: '#98a2b0', anchor: 'start' }
+     ]
+   }, null, 2); %>
+<h1><%= isNew ? 'New Card Template' : 'Edit Card Template' %></h1>
+<% for (const error of (errors || [])) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+
+<div class="grid">
+  <section class="card">
+    <form method="post" action="/cards/<%= t.id || 'new' %>/save">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label for="name">Template name</label>
+      <input id="name" name="name" type="text" value="<%= t.name || '' %>" required>
+
+      <label for="kind">Kind</label>
+      <select id="kind" name="kind">
+        <% for (const k of ['welcome','birthday','announcement','role_unlock','event','generic']) { %>
+          <option value="<%= k %>" <%= t.kind === k ? 'selected' : '' %>><%= k %></option>
+        <% } %>
+      </select>
+
+      <label for="width">Width (px)</label>
+      <input id="width" name="width" type="number" min="100" max="4000" value="<%= t.width || 1000 %>">
+      <label for="height">Height (px)</label>
+      <input id="height" name="height" type="number" min="100" max="4000" value="<%= t.height || 420 %>">
+
+      <label for="layout">Layout (JSON)</label>
+      <textarea id="layout" name="layout" rows="16" style="font-family:monospace"><%= layoutJson %></textarea>
+
+      <button type="submit" class="btn btn-primary">Save template</button>
+      <a class="btn btn-ghost" href="/cards">Back</a>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Preview</h2>
+    <% if (!isNew) { %>
+      <p class="muted small">Rendered with sample data. Save to refresh.</p>
+      <img src="/cards/<%= t.id %>/preview.png" alt="card preview" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
+    <% } else { %>
+      <p class="muted">Save the template to see a preview.</p>
+    <% } %>
+
+    <h2>Placeholders</h2>
+    <ul class="statuslist">
+      <% for (const p of placeholders) { %>
+        <li><code>{{<%= p %>}}</code></li>
+      <% } %>
+    </ul>
+    <p class="muted small">Use <code>background.type: "image"</code> with an <code>assetId</code> from the
+    Dynamic Cards page to use an uploaded background.</p>
+  </section>
+</div>
+<%- include('partials/footer') %>

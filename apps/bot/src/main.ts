@@ -1,5 +1,6 @@
 import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
+import { createCardsModule } from '@botplatform/cards-module';
 import { loadConfig } from '@botplatform/config';
 import { BotKernel, CachedModuleState } from '@botplatform/core';
 import {
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: adapter,
   });
+  const cardsHandle = createCardsModule({ config, logger, db: database.db });
   adapter.onGuildSeen = (externalId, name) => {
     void guildsRepo
       .upsertByExternalId({ adapterKey: ADAPTER_KEYS.discord, externalId, name })
@@ -62,7 +64,12 @@ async function main(): Promise<void> {
   const kernel = new BotKernel({
     config,
     logger,
-    modules: [audioHandle.module, moderationHandle.module, announcementsHandle.module],
+    modules: [
+      audioHandle.module,
+      moderationHandle.module,
+      announcementsHandle.module,
+      cardsHandle.module,
+    ],
     adapters: [adapter],
     audit,
     moduleState,

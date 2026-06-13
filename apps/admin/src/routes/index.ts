@@ -1,5 +1,6 @@
 import type { AdminRoutePlugin } from './context.js';
 import { registerAnnouncementRoutes } from './announcements.js';
+import { registerCardsRoutes } from './cards.js';
 import { registerPlaceholderRoutes } from './placeholders.js';
 
 /**
@@ -9,6 +10,7 @@ import { registerPlaceholderRoutes } from './placeholders.js';
  */
 export const COMMUNITY_ROUTE_PLUGINS: AdminRoutePlugin[] = [
   registerAnnouncementRoutes,
+  registerCardsRoutes,
   registerPlaceholderRoutes,
 ];
 

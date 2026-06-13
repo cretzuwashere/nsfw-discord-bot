@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@botplatform/announcements-module": "workspace:*",
+    "@botplatform/cards-module": "workspace:*",
     "@botplatform/config": "workspace:*",
     "@botplatform/core": "workspace:*",
     "@botplatform/database": "workspace:*",
@@ -19,6 +20,7 @@
     "@botplatform/shared": "workspace:*",
     "@fastify/csrf-protection": "catalog:",
     "@fastify/formbody": "catalog:",
+    "@fastify/multipart": "catalog:",
     "@fastify/rate-limit": "catalog:",
     "@fastify/secure-session": "catalog:",
     "@fastify/sensible": "catalog:",

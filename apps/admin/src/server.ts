@@ -14,6 +14,7 @@ import type { Logger } from '@botplatform/logger';
 import { verifyPassword } from '@botplatform/security';
 import csrfProtection from '@fastify/csrf-protection';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import secureSession from '@fastify/secure-session';
 import sensible from '@fastify/sensible';
@@ -65,6 +66,9 @@ export async function buildAdminServer(deps: AdminDeps): Promise<FastifyInstance
   const botClient = deps.botClient ?? createBotClient(config, logger);
 
   await app.register(formbody);
+  // Multipart for card-background uploads (8 MB cap; the cards module also
+  // validates the mime type and stores under the uploads volume safely).
+  await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
   await app.register(secureSession, {
     secret: config.admin.sessionSecret,
     salt: SESSION_SALT,
