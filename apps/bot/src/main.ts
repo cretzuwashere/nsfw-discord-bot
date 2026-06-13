@@ -1,5 +1,6 @@
 import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
+import { createAutomodModule } from '@botplatform/automod-module';
 import { createBirthdaysModule } from '@botplatform/birthdays-module';
 import { createCardsModule } from '@botplatform/cards-module';
 import { createCustomCommandsModule } from '@botplatform/custom-commands-module';
@@ -98,6 +99,13 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: adapter,
   });
+  const automodHandle = createAutomodModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+  });
   adapter.onGuildSeen = (externalId, name) => {
     void guildsRepo
       .upsertByExternalId({ adapterKey: ADAPTER_KEYS.discord, externalId, name })
@@ -120,6 +128,7 @@ async function main(): Promise<void> {
       customCommandsHandle.module,
       remindersHandle.module,
       birthdaysHandle.module,
+      automodHandle.module,
     ],
     adapters: [adapter],
     audit,

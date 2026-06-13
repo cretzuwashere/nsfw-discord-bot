@@ -1,0 +1,119 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Auto-Moderation</h1>
+<% if (message) { %><div class="alert alert-ok" role="status"><%= message.replace(/\+/g, ' ') %></div><% } %>
+<% if (!contentRulesAvailable) { %>
+  <div class="alert alert-error" role="alert">Content-based rules (banned words, links, caps) require the
+  <strong>Message Content</strong> privileged intent. Set <code>DISCORD_ENABLE_MESSAGE_CONTENT=true</code> and
+  enable it in the Discord developer portal. Non-content rules (mention spam, attachments, spam rate) still work.</div>
+<% } %>
+
+<% if (guilds.length === 0) { %>
+  <section class="card"><p class="muted">No servers yet.</p></section>
+<% } else { %>
+<section class="card">
+  <label for="guildPicker">Server</label>
+  <select id="guildPicker" onchange="location.href='/automod?guild='+this.value">
+    <% for (const g of guilds) { %><option value="<%= g.id %>" <%= selectedGuildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option><% } %>
+  </select>
+
+  <h2>Rules</h2>
+  <% if (rules.length === 0) { %>
+    <p class="muted">No automod rules yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Action</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% for (const r of rules) { %>
+          <tr>
+            <td><%= r.name %></td>
+            <td><code><%= r.ruleType %></code></td>
+            <td><%= r.action %><%= r.escalationAction ? ` → ${r.escalationAction}` : '' %></td>
+            <td><span class="badge badge-<%= r.enabled ? 'ok' : 'muted' %>"><%= r.enabled ? 'Enabled' : 'Disabled' %></span></td>
+            <td>
+              <form method="post" action="/automod/<%= r.id %>/delete" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-warn">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Add a rule</h2>
+  <form method="post" action="/automod/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="guildId" value="<%= selectedGuildId %>">
+    <label for="name">Rule name</label>
+    <input id="name" name="name" type="text">
+    <label for="ruleType">Rule type</label>
+    <select id="ruleType" name="ruleType">
+      <% for (const t of ruleTypes) { %><option value="<%= t %>"><%= t %></option><% } %>
+    </select>
+    <label class="checkbox-label"><input type="checkbox" name="enabled" checked> Enabled</label>
+
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.5rem 1rem;margin-top:1rem">
+      <legend class="muted small">Rule config (fill what applies)</legend>
+      <label for="words">Banned words (comma/newline separated)</label>
+      <textarea id="words" name="words" rows="2"></textarea>
+      <label for="mentionThreshold">Mention threshold</label>
+      <input id="mentionThreshold" name="mentionThreshold" type="number" min="1" max="50" value="5">
+      <label for="capsMinLength">Caps: min length</label>
+      <input id="capsMinLength" name="capsMinLength" type="number" min="1" max="500" value="10">
+      <label for="allowedDomains">Suspicious links: allowed domains</label>
+      <textarea id="allowedDomains" name="allowedDomains" rows="2"></textarea>
+      <label for="minAccountAgeDays">New account: min age (days)</label>
+      <input id="minAccountAgeDays" name="minAccountAgeDays" type="number" min="1" max="365" value="7">
+      <label for="threshold">Spam: messages per 10s</label>
+      <input id="threshold" name="threshold" type="number" min="2" max="50" value="5">
+    </fieldset>
+
+    <label for="action">Action</label>
+    <select id="action" name="action">
+      <% for (const a of actions) { %><option value="<%= a %>"><%= a %></option><% } %>
+    </select>
+    <label for="responseMessage">Warn message (for "warn" action)</label>
+    <input id="responseMessage" name="responseMessage" type="text">
+    <label for="escalationThreshold">Escalate after N violations (optional)</label>
+    <input id="escalationThreshold" name="escalationThreshold" type="number" min="1" max="100">
+    <label for="escalationAction">Escalation action</label>
+    <select id="escalationAction" name="escalationAction">
+      <option value="">— none —</option>
+      <% for (const a of actions) { %><option value="<%= a %>"><%= a %></option><% } %>
+    </select>
+    <label for="ignoredChannelIds">Ignored channel IDs</label>
+    <input id="ignoredChannelIds" name="ignoredChannelIds" type="text">
+    <label for="ignoredRoleIds">Ignored role IDs</label>
+    <input id="ignoredRoleIds" name="ignoredRoleIds" type="text">
+
+    <button type="submit" class="btn btn-primary">Add rule</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Recent violations</h2>
+  <% if (violations.length === 0) { %>
+    <p class="muted">No violations recorded.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Time</th><th>User</th><th>Rule</th><th>Action</th><th>Detail</th></tr></thead>
+      <tbody>
+        <% for (const v of violations) { %>
+          <tr>
+            <td class="nowrap muted small"><%= v.createdAt.toISOString().slice(0,16).replace('T',' ') %></td>
+            <td class="muted small"><%= v.userExternalId %></td>
+            <td><code><%= v.ruleType %></code></td>
+            <td><%= v.actionTaken %></td>
+            <td class="muted"><%= v.detail || '' %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<% } %>
+<%- include('partials/footer') %>

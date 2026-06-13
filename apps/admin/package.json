@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@botplatform/announcements-module": "workspace:*",
+    "@botplatform/automod-module": "workspace:*",
     "@botplatform/birthdays-module": "workspace:*",
     "@botplatform/cards-module": "workspace:*",
     "@botplatform/custom-commands-module": "workspace:*",

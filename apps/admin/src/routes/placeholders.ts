@@ -7,8 +7,7 @@ import type { AdminRouteContext, AdminRoutePlugin } from './context.js';
  */
 const PLACEHOLDER_PAGES: Array<{ path: string; title: string; description: string }> = [
   { path: '/reminders', title: 'Reminders', description: 'Personal reminders are created in Discord with /reminder create|list|remove. Recurring and timezone-aware.' },
-  { path: '/automod', title: 'Auto-Moderation', description: 'Banned words, spam, mention and link filtering with escalation.' },
-  { path: '/permissions', title: 'Permissions', description: 'Map platform roles to module permissions.' },
+  { path: '/permissions', title: 'Permissions', description: 'Map platform roles to module permissions. Role→permission mappings are stored in permission_mappings; full editor is on the roadmap.' },
 ];
 
 export const registerPlaceholderRoutes: AdminRoutePlugin = (app, ctx: AdminRouteContext) => {
