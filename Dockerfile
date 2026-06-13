@@ -87,11 +87,20 @@ RUN pnpm install --prod --frozen-lockfile
 # -----------------------------------------------------------------------------
 FROM node:24-bookworm-slim AS runtime-base
 
-# ffmpeg — audio transcoding; curl — container HEALTHCHECKs;
-# ca-certificates — outbound HTTPS (Discord gateway, audio URLs).
+# ffmpeg — audio transcoding; curl — container HEALTHCHECKs + yt-dlp fetch;
+# ca-certificates — outbound HTTPS (Discord gateway, audio URLs);
+# python3 — yt-dlp's runtime interpreter for the standalone binary's needs.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
+  && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates python3 \
   && rm -rf /var/lib/apt/lists/*
+
+# yt-dlp — YouTube/SoundCloud/Spotify playback. Standalone binary, pinned;
+# bump YTDLP_VERSION to update.
+ARG YTDLP_VERSION=2026.06.09
+RUN curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
+      -o /usr/local/bin/yt-dlp \
+  && chmod a+rx /usr/local/bin/yt-dlp \
+  && /usr/local/bin/yt-dlp --version
 
 ENV NODE_ENV=production
 WORKDIR /app

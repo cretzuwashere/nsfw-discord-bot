@@ -37,11 +37,20 @@ docker compose exec app pnpm --version    # is the toolbox alive?
   `docker compose restart bot`.
 
 **Audio does not play / stops immediately**
-- Only **direct links to audio files** are supported in v1 (mp3/ogg/wav/m4a…)
-  — a YouTube/Spotify page URL is rejected as unsupported.
+- Supported: **YouTube, SoundCloud, Spotify** (single tracks) and **direct
+  audio-file links**. See [AUDIO_SOURCES.md](AUDIO_SOURCES.md).
+- `"Sign in to confirm you're not a bot"` in the bot logs → yt-dlp is stale
+  or YouTube is rate-limiting this IP. Bump `YTDLP_VERSION` in `Dockerfile`/
+  `Dockerfile.dev` to the latest release and
+  `docker compose build app && docker compose up -d`. Verify with
+  `docker compose exec app yt-dlp --version`.
+- Spotify plays the closest YouTube match (their own audio is DRM-protected);
+  only single `…/track/…` links work, not albums/playlists.
 - Links to `localhost`/private IPs/internal hostnames are **blocked by
   design** (SSRF protection) — host test files on a real public URL, or relax
   consciously via guild allowlist + code change.
+- Streaming disabled? Check `AUDIO_ENABLE_STREAMING_SOURCES` is not `false`,
+  and `docker compose exec app pnpm exec tsx scripts/check-audio-stack.ts`.
 - If `ALLOWED_AUDIO_DOMAINS` is set, only those domains pass.
 - Admin panel → Audio Player → **Recent playback errors** shows the safe
   error per track.

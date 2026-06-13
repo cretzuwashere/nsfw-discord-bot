@@ -21,7 +21,7 @@ FROM mcr.microsoft.com/playwright:v1.60.0-noble
 #   python3 make g++  — REQUIRED: @discordjs/opus compiles from source on this
 #                       glibc (no prebuilt binary for this platform/Node combo)
 #   git               — pnpm needs it for some operations; devcontainer use
-#   curl              — compose healthchecks + manual endpoint poking
+#   curl              — compose healthchecks + manual endpoint poking + yt-dlp fetch
 #   ca-certificates   — TLS trust for outbound HTTPS (audio URL fetching)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -34,6 +34,16 @@ RUN apt-get update \
     curl \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+
+# yt-dlp — powers YouTube/SoundCloud/Spotify playback. Installed as the
+# standalone binary (self-contained, no pip needed) and pinned to a known
+# release; bump YTDLP_VERSION to update. It self-updates extractors via its
+# own release cadence, so keep this reasonably current in production.
+ARG YTDLP_VERSION=2026.06.09
+RUN curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
+      -o /usr/local/bin/yt-dlp \
+  && chmod a+rx /usr/local/bin/yt-dlp \
+  && /usr/local/bin/yt-dlp --version
 
 # Pin pnpm exactly (same as "packageManager" in package.json).
 # Deliberately NOT using corepack — it is being removed from Node and its

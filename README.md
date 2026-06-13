@@ -69,9 +69,12 @@ first run.
 | `/stop` | Stop and clear the queue, stay connected |
 | `/nowplaying` | Title, source, status, requester |
 
-Supported links: direct HTTP(S) audio files (mp3/ogg/wav/m4a/…). Private and
-internal addresses are blocked; an allowlist is available via
-`ALLOWED_AUDIO_DOMAINS`. The provider layer is built for future sources.
+Supported sources: **YouTube**, **SoundCloud**, **Spotify** (single tracks —
+resolved to the best audio match) and **direct HTTP(S) audio files**
+(mp3/ogg/wav/m4a/…). Streaming sources are powered by `yt-dlp` bundled in the
+Docker images (toggle with `AUDIO_ENABLE_STREAMING_SOURCES`). Private and
+internal addresses are blocked; an optional allowlist is available via
+`ALLOWED_AUDIO_DOMAINS`. The provider layer is extensible for future sources.
 
 ## Architecture (short version)
 

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // Verifies the voice/audio runtime inside the Linux container:
 // opus encoder, encryption mode, and ffmpeg availability.
 // Run: docker compose exec app pnpm exec tsx scripts/check-audio-stack.ts

@@ -7,6 +7,8 @@ export interface ResolveContext {
   allowedDomains: string[];
   /** Network timeout for metadata/stream setup. */
   timeoutMs: number;
+  /** Tracks with known metadata longer than this are rejected up front. */
+  maxTrackDurationSeconds?: number | undefined;
   logger: Logger;
 }
 

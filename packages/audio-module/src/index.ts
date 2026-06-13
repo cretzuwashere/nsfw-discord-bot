@@ -7,7 +7,11 @@ import { MODULE_KEYS } from '@botplatform/shared';
 import { buildAudioCommands } from './commands.js';
 import { PlayerManager } from './engine/manager.js';
 import { DirectHttpAudioProvider } from './resolver/providers/direct-http.js';
+import { SpotifyAudioProvider } from './resolver/providers/spotify-provider.js';
+import { YtDlpAudioProvider } from './resolver/providers/ytdlp-provider.js';
 import { AudioResolver } from './resolver/resolver.js';
+import type { AudioProvider } from './resolver/types.js';
+import { createExecYtDlpRunner } from './resolver/ytdlp-runner.js';
 
 export interface AudioModuleOptions {
   config: AppConfig;
@@ -26,7 +30,22 @@ export interface AudioModuleHandle {
 
 export function createAudioModule(options: AudioModuleOptions): AudioModuleHandle {
   const logger = options.logger.child({ module: MODULE_KEYS.audioPlayer });
-  const resolver = new AudioResolver([new DirectHttpAudioProvider()]);
+
+  // Provider order matters: platform resolvers (YouTube/SoundCloud/Spotify)
+  // claim their hosts first; the direct-HTTP catch-all handles everything
+  // else. Streaming providers are added only when enabled.
+  const providers: AudioProvider[] = [];
+  let ytdlpRunner: ReturnType<typeof createExecYtDlpRunner> | null = null;
+  if (options.config.audio.enableStreamingSources) {
+    ytdlpRunner = createExecYtDlpRunner(options.config.audio.ytdlpPath, logger);
+    const limits = { maxTrackDurationSeconds: options.config.audio.maxTrackDurationSeconds };
+    providers.push(
+      new YtDlpAudioProvider(ytdlpRunner, limits),
+      new SpotifyAudioProvider(ytdlpRunner, limits)
+    );
+  }
+  providers.push(new DirectHttpAudioProvider());
+  const resolver = new AudioResolver(providers);
   const manager = new PlayerManager(
     {
       maxQueueSize: options.config.audio.maxQueueSize,
@@ -49,12 +68,22 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
         logger,
       },
     }),
-    onLoad(ctx) {
+    async onLoad(ctx) {
+      let streamingReady = false;
+      if (ytdlpRunner) {
+        streamingReady = await ytdlpRunner.available().catch(() => false);
+        if (!streamingReady) {
+          ctx.logger.warn(
+            'streaming sources are enabled but yt-dlp is not available — YouTube/SoundCloud/Spotify links will fail. Install yt-dlp in the runtime image or set AUDIO_ENABLE_STREAMING_SOURCES=false.'
+          );
+        }
+      }
       ctx.logger.info(
         {
           maxQueueSize: options.config.audio.maxQueueSize,
           maxTrackDurationSeconds: options.config.audio.maxTrackDurationSeconds,
           allowedDomains: options.config.audio.allowedDomains.length || 'any public domain',
+          streamingSources: ytdlpRunner ? (streamingReady ? 'ready' : 'unavailable') : 'disabled',
         },
         'audio player ready'
       );
@@ -78,4 +107,8 @@ export { GuildPlaybackSession } from './engine/session.js';
 export { PlayerManager } from './engine/manager.js';
 export { AudioResolver } from './resolver/resolver.js';
 export { DirectHttpAudioProvider } from './resolver/providers/direct-http.js';
+export { YtDlpAudioProvider } from './resolver/providers/ytdlp-provider.js';
+export { SpotifyAudioProvider } from './resolver/providers/spotify-provider.js';
+export { createExecYtDlpRunner } from './resolver/ytdlp-runner.js';
+export type { YtDlpRunner } from './resolver/ytdlp-runner.js';
 export type { AudioProvider, ResolveContext, ResolvedTrack } from './resolver/types.js';

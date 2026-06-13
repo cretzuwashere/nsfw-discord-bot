@@ -75,10 +75,15 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
 
   const play: CommandDefinition = {
     name: 'play',
-    description: 'Play audio from a link (or queue it if something is playing)',
+    description: 'Play from YouTube, SoundCloud, Spotify or a direct audio link (or queue it)',
     guildOnly: true,
     options: [
-      { name: 'url', description: 'Link to an audio file', type: 'string', required: true },
+      {
+        name: 'url',
+        description: 'YouTube / SoundCloud / Spotify link, or a direct audio file URL',
+        type: 'string',
+        required: true,
+      },
     ],
     async execute(ctx) {
       await ctx.defer();
