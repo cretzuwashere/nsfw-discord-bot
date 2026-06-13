@@ -16,9 +16,19 @@ invite the bot to your server.
      dots. If your value doesn't look like that, you copied the wrong thing
      (the *public key* and *client secret* are different values that won't
      work here).
-   - Under **Privileged Gateway Intents**: none are required for this bot
-     (audio playback uses only the standard `Guilds` and `GuildVoiceStates`
-     intents).
+   - Under **Privileged Gateway Intents**: the **audio bot needs none** — leave
+     them off and it connects fine. Only enable these if you also want the
+     matching community feature (and set the matching `.env` flag, below):
+     - **Server Members Intent** → Welcome/Leave + Birthdays-on-join.
+       Set `DISCORD_ENABLE_GUILD_MEMBERS=true`.
+     - **Message Content Intent** → content-based auto-moderation.
+       Set `DISCORD_ENABLE_MESSAGE_CONTENT=true`.
+
+   > ⚠️ The portal toggle and the `.env` flag must agree. If you set the flag
+   > `true` without enabling the intent in the portal, Discord refuses the
+   > connection (error **4014 Disallowed intents**) and the bot won't log in.
+   > If in doubt, leave both off — you still get audio + moderation + roles +
+   > reminders + announcements + birthday commands.
 
 > Treat the token like a password. If it ever leaks (pasted in chat, committed
 > to git), go to the Bot page and **Reset Token** — the old one stops working.
@@ -65,24 +75,33 @@ docker compose restart bot
 docker compose exec app pnpm discord:register-commands
 ```
 
-Expected output: `Registered 9 slash commands for guild <id> (instant).`
+Expected output: `Registered 27 slash commands for guild <id> (instant).`
+(10 audio + 12 moderation + announcements/roles/birthday/reminder/custom — the
+latter five each register as one command with subcommands.)
 
 ## 5. Try it
 
 1. Join a voice channel in your server.
-2. Type `/join` — the bot joins your channel.
-3. `/play url:` + a direct link to an audio file (`.mp3`, `.ogg`, `.wav`, …).
-4. `/queue`, `/skip`, `/pause`, `/resume`, `/stop`, `/nowplaying`, `/leave`.
+2. `/play url:<link>` — a YouTube link (public **or unlisted**), SoundCloud,
+   Spotify track, or a direct audio file (`.mp3`, `.ogg`, `.wav`, …). The bot
+   joins your channel and starts playing, and posts a **visual panel** with a
+   progress bar and Pause/Skip/Stop/Leave buttons.
+3. `/controls` shows that panel any time; `/nowplaying`, `/queue`, `/skip`,
+   `/pause`, `/resume`, `/stop`, `/leave` also work.
+4. Private/age-restricted YouTube needs a cookies file — see
+   [AUDIO_SOURCES.md](AUDIO_SOURCES.md). Unlisted videos need nothing extra.
 
-The admin panel (http://localhost:3000 → *Audio Player*) shows the live
-session with skip/stop/clear buttons, and *Dashboard* shows the connection
-as `connected` with the bot's tag.
+Browse every command (with options + required permissions) on the admin
+panel's **Commands** page. The admin panel (http://localhost:3000 →
+*Audio Player*) shows the live session with skip/stop/clear buttons, and
+*Dashboard* shows the connection as `connected` with the bot's tag.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
 | Dashboard shows Discord `error` / log says `TokenInvalid` | Wrong/expired token → Reset Token in the portal, update `.env`, `docker compose restart bot` |
+| Log says `Disallowed intents` / close code `4014` | You set `DISCORD_ENABLE_GUILD_MEMBERS` or `DISCORD_ENABLE_MESSAGE_CONTENT` to `true` but didn't enable that **Privileged Gateway Intent** in the portal. Enable it there, or set the flag back to `false`. |
 | Slash commands don't appear | Re-run `discord:register-commands`; with no `DISCORD_GUILD_ID` wait up to 1 h; make sure the invite included `applications.commands` |
 | Bot joins but no sound plays | Check the bot has **Speak** permission in that channel; see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | `/play` rejects your link | Only direct http(s) audio links are supported in v1; private/internal hosts are blocked by design |

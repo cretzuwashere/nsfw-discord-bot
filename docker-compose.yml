@@ -34,6 +34,9 @@ x-dev-environment: &dev-environment
   DISCORD_TOKEN: ${DISCORD_TOKEN:-}
   DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
   DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+  # Privileged intents — must also be enabled in the Discord portal. Both
+  # default OFF; the audio bot needs neither. See .env.example / DISCORD_SETUP.md.
+  DISCORD_ENABLE_GUILD_MEMBERS: ${DISCORD_ENABLE_GUILD_MEMBERS:-false}
   DISCORD_ENABLE_MESSAGE_CONTENT: ${DISCORD_ENABLE_MESSAGE_CONTENT:-false}
   ADMIN_PORT: ${ADMIN_PORT:-3000}
   PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:3000}

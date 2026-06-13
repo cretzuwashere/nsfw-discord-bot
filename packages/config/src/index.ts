@@ -18,6 +18,11 @@ const envSchema = z.object({
     .optional()
     .default('false')
     .transform((v) => v.toLowerCase() === 'true'),
+  DISCORD_ENABLE_GUILD_MEMBERS: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((v) => v.toLowerCase() === 'true'),
 
   ADMIN_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   PUBLIC_ADMIN_URL: z.string().default('http://localhost:3000'),
@@ -77,6 +82,10 @@ export interface AppConfig {
     guildId: string;
     /** Privileged MessageContent intent — required by content-based automod. */
     enableMessageContent: boolean;
+    /** Privileged GuildMembers intent — required by member-based modules
+     * (welcome/leave, birthdays-on-join). Off = bot connects with no
+     * privileged intents (audio-only path needs nothing toggled). */
+    enableGuildMembers: boolean;
   };
   admin: {
     port: number;
@@ -135,6 +144,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       clientId: e.DISCORD_CLIENT_ID,
       guildId: e.DISCORD_GUILD_ID,
       enableMessageContent: e.DISCORD_ENABLE_MESSAGE_CONTENT,
+      enableGuildMembers: e.DISCORD_ENABLE_GUILD_MEMBERS,
     },
     admin: {
       port: e.ADMIN_PORT,

@@ -33,6 +33,9 @@ x-app-environment: &app-environment
   HEALTH_PORT: ${HEALTH_PORT:-8081}
   INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required - a long random shared secret}
   BOT_INTERNAL_URL: ${BOT_INTERNAL_URL:-http://bot:8081}
+  # Privileged intents — must also be enabled in the Discord portal. Both
+  # default OFF; the audio bot needs neither.
+  DISCORD_ENABLE_GUILD_MEMBERS: ${DISCORD_ENABLE_GUILD_MEMBERS:-false}
   DISCORD_ENABLE_MESSAGE_CONTENT: ${DISCORD_ENABLE_MESSAGE_CONTENT:-false}
   ALLOWED_AUDIO_DOMAINS: ${ALLOWED_AUDIO_DOMAINS:-}
   MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-50}

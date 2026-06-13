@@ -59,17 +59,24 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
       return;
     }
 
-    // GuildMembers (privileged) powers welcome/leave + member-based modules;
-    // GuildMessages + MessageContent (privileged) power automod content rules.
-    // Privileged intents must be enabled in the Discord developer portal; the
-    // bot still connects without them (those modules just stay degraded).
+    // Privileged intents (GuildMembers, MessageContent) must BOTH be toggled
+    // in the Discord developer portal AND requested here. Requesting one that
+    // isn't enabled in the portal makes the gateway reject the connection
+    // (close code 4014 "Disallowed intents") — the bot won't connect at all.
+    // So they are opt-in: the default audio bot requests NO privileged intents
+    // and connects with zero portal toggles. Enable the flags only when you've
+    // also enabled the matching intent in the portal.
+    //   - GuildMembers  → welcome/leave + member-based modules (birthdays-on-join)
+    //   - MessageContent → content-based automod rules
     const intents = [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildVoiceStates,
-      GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.GuildModeration,
     ];
+    if (config.discord.enableGuildMembers) {
+      intents.push(GatewayIntentBits.GuildMembers);
+    }
     if (config.discord.enableMessageContent) {
       intents.push(GatewayIntentBits.MessageContent);
     }
