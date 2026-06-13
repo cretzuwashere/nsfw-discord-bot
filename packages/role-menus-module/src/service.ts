@@ -43,6 +43,8 @@ export function createRoleMenuService(deps: RoleMenuServiceDeps) {
       return;
     }
 
+    // A button customId carries the role id; a select submission carries values.
+    const kind = parsed.roleId ? 'button' : 'select';
     const requested = parsed.roleId ? [parsed.roleId] : event.values;
     const menuRoleIds = menu.options.map((o) => o.roleId);
     const changes = computeRoleChanges({
@@ -51,6 +53,7 @@ export function createRoleMenuService(deps: RoleMenuServiceDeps) {
       held: new Set(event.userRoleIds),
       requested,
       constraints: (menu.constraints ?? {}) as MenuConstraints,
+      kind,
     });
 
     if (changes.rejected) {

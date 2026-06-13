@@ -94,6 +94,22 @@ export function createBirthdayRepo(db: Db) {
       return db.select().from(settings).where(eq(settings.enabled, true));
     },
 
+    /** True if an announcement row already exists for (guild,user,date). */
+    async hasAnnounced(guildId: string, userExternalId: string, dateKey: string): Promise<boolean> {
+      const rows = await db
+        .select({ id: announced.id })
+        .from(announced)
+        .where(
+          and(
+            eq(announced.guildId, guildId),
+            eq(announced.userExternalId, userExternalId),
+            eq(announced.announcedOn, dateKey)
+          )
+        )
+        .limit(1);
+      return rows.length > 0;
+    },
+
     /** Returns true if this is the first announcement for (guild,user,date). */
     async markAnnounced(guildId: string, userExternalId: string, dateKey: string): Promise<boolean> {
       const rows = await db

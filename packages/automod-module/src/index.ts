@@ -38,8 +38,17 @@ export function createAutomodModule(options: AutomodModuleOptions): AutomodModul
   const adapterKey = options.adapterKey ?? 'discord';
   const contentRulesAvailable = options.config.discord.enableMessageContent;
 
-  // Per-user recent-message timestamps for the spam rule (in-memory).
+  // Per-user recent-message timestamps for the spam rule (in-memory). Pruned
+  // opportunistically so quiet users' keys don't accumulate unbounded.
   const recentMessages = new Map<string, number[]>();
+  function pruneSpamMap(now: number): void {
+    if (recentMessages.size < 5000) return;
+    for (const [key, stamps] of recentMessages) {
+      const live = stamps.filter((ts) => now - ts < SPAM_WINDOW_MS);
+      if (live.length === 0) recentMessages.delete(key);
+      else recentMessages.set(key, live);
+    }
+  }
 
   async function handleMessage(event: MessageCreateEvent): Promise<void> {
     if (!event.guild) return;
@@ -51,12 +60,16 @@ export function createAutomodModule(options: AutomodModuleOptions): AutomodModul
     const rules = await repo.enabledForGuild(guild.id);
     if (rules.length === 0) return;
 
-    // Track message rate for spam detection.
-    const spamKey = `${event.guild.externalId}:${event.author.externalId}`;
+    // Track message rate only when a spam rule is actually enabled.
     const now = Date.now();
-    const recent = (recentMessages.get(spamKey) ?? []).filter((ts) => now - ts < SPAM_WINDOW_MS);
-    recent.push(now);
-    recentMessages.set(spamKey, recent);
+    let recent: number[] = [];
+    if (rules.some((r) => r.ruleType === 'spam')) {
+      const spamKey = `${event.guild.externalId}:${event.author.externalId}`;
+      recent = (recentMessages.get(spamKey) ?? []).filter((ts) => now - ts < SPAM_WINDOW_MS);
+      recent.push(now);
+      recentMessages.set(spamKey, recent);
+      pruneSpamMap(now);
+    }
 
     const service = options.guildServiceProvider.forGuild(event.guild.externalId);
 
@@ -78,7 +91,9 @@ export function createAutomodModule(options: AutomodModuleOptions): AutomodModul
               content: event.content,
               mentionCount: event.mentionCount,
               hasAttachments: event.hasAttachments,
-              accountAgeDays: undefined,
+              accountAgeDays: event.author.createdAt
+                ? (Date.now() - event.author.createdAt.getTime()) / 86_400_000
+                : undefined,
             });
       if (!result.violated) continue;
 

@@ -58,6 +58,7 @@ const SECRET_ENV_KEYS = [
   'ADMIN_PASSWORD',
   'E2E_ADMIN_PASSWORD',
   'POSTGRES_PASSWORD',
+  'DISCORD_TOKEN',
 ] as const;
 
 /**

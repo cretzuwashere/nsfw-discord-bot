@@ -10,8 +10,14 @@ import type { RoleMenuWithOptions } from './repo.js';
 
 const MENU_ROLES = ['r1', 'r2', 'r3'];
 
-function changes(mode: Parameters<typeof computeRoleChanges>[0]['mode'], held: string[], requested: string[], constraints = {}) {
-  return computeRoleChanges({ mode, menuRoleIds: MENU_ROLES, held: new Set(held), requested, constraints });
+function changes(
+  mode: Parameters<typeof computeRoleChanges>[0]['mode'],
+  held: string[],
+  requested: string[],
+  constraints = {},
+  kind: 'button' | 'select' = requested.length > 1 ? 'select' : 'button'
+) {
+  return computeRoleChanges({ mode, menuRoleIds: MENU_ROLES, held: new Set(held), requested, constraints, kind });
 }
 
 describe('computeRoleChanges — buttons', () => {
@@ -50,6 +56,18 @@ describe('computeRoleChanges — select menus', () => {
     const result = changes('multiple', ['r1'], ['r2', 'r3']);
     expect(result.add.sort()).toEqual(['r2', 'r3']);
     expect(result.remove).toEqual(['r1']);
+  });
+
+  it('treats a single-value SELECT submission as the desired set (not a toggle)', () => {
+    // User holds {r1,r2}, narrows the multi-select to just r1 → keep r1, drop r2.
+    const result = changes('multiple', ['r1', 'r2'], ['r1'], {}, 'select');
+    expect(result.add).toEqual([]);
+    expect(result.remove).toEqual(['r2']);
+  });
+
+  it('a single-value BUTTON click still toggles', () => {
+    const result = changes('multiple', ['r1', 'r2'], ['r1'], {}, 'button');
+    expect(result.remove).toEqual(['r1']); // toggled off
   });
 });
 

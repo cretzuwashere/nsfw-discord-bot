@@ -76,6 +76,15 @@ COPY packages/database/package.json packages/database/package.json
 COPY packages/audio-module/package.json packages/audio-module/package.json
 COPY packages/moderation-module/package.json packages/moderation-module/package.json
 COPY packages/discord-adapter/package.json packages/discord-adapter/package.json
+COPY packages/announcements-module/package.json packages/announcements-module/package.json
+COPY packages/cards-module/package.json packages/cards-module/package.json
+COPY packages/welcome-module/package.json packages/welcome-module/package.json
+COPY packages/role-menus-module/package.json packages/role-menus-module/package.json
+COPY packages/scheduled-messages-module/package.json packages/scheduled-messages-module/package.json
+COPY packages/custom-commands-module/package.json packages/custom-commands-module/package.json
+COPY packages/reminders-module/package.json packages/reminders-module/package.json
+COPY packages/birthdays-module/package.json packages/birthdays-module/package.json
+COPY packages/automod-module/package.json packages/automod-module/package.json
 COPY apps/bot/package.json apps/bot/package.json
 COPY apps/admin/package.json apps/admin/package.json
 COPY tests/e2e/package.json tests/e2e/package.json

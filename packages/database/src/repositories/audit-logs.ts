@@ -69,20 +69,30 @@ function buildFilter(options: AuditFilter): SQL | undefined {
   return clauses.length === 1 ? clauses[0] : and(...clauses);
 }
 
+const SECRET_KEY_RE = /token|password|secret|authorization/i;
+
 /** Defensive: metadata must be JSON-serializable and free of obvious secrets. */
 function sanitizeMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!metadata) return {};
   try {
     const clean = JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>;
-    for (const key of Object.keys(clean)) {
-      if (/token|password|secret|authorization/i.test(key)) {
-        clean[key] = '[REDACTED]';
-      }
-    }
-    return clean;
+    return redactSecrets(clean) as Record<string, unknown>;
   } catch {
     return { note: 'metadata was not serializable' };
   }
+}
+
+/** Recursively redact secret-looking keys at any nesting depth. */
+function redactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecrets);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = SECRET_KEY_RE.test(key) ? '[REDACTED]' : redactSecrets(val);
+    }
+    return out;
+  }
+  return value;
 }
 
 export type AuditLogsRepo = ReturnType<typeof createAuditLogsRepo>;

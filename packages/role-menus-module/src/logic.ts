@@ -27,8 +27,10 @@ export function computeRoleChanges(input: {
   held: Set<string>;
   requested: string[];
   constraints: MenuConstraints;
+  /** 'button' = a single toggle click; 'select' = the full desired set. */
+  kind: 'button' | 'select';
 }): RoleChanges {
-  const { mode, menuRoleIds, held, requested, constraints } = input;
+  const { mode, menuRoleIds, held, requested, constraints, kind } = input;
 
   if (constraints.requiredRoleId && !held.has(constraints.requiredRoleId)) {
     return { add: [], remove: [], rejected: 'You need another role before using this menu.' };
@@ -62,14 +64,16 @@ export function computeRoleChanges(input: {
       break;
     default: {
       // multiple / toggle
-      if (valid.length === 1) {
+      if (kind === 'select') {
+        // A select submission IS the full desired set (even a single value),
+        // so add the chosen and remove the menu roles that were deselected.
+        target = new Set(valid);
+      } else {
+        // A button click toggles exactly that one role.
         const r = valid[0]!;
         target = new Set(heldMenu);
         if (heldMenu.has(r)) target.delete(r);
         else target.add(r);
-      } else {
-        // select submission → desired set is exactly the chosen options
-        target = new Set(valid);
       }
     }
   }
@@ -115,11 +119,14 @@ export function buildMenuMessage(menu: RoleMenuWithOptions): OutgoingMessage {
   };
 
   if (menu.type === 'select') {
+    // single/unique modes are one-at-a-time, so a select must cap at 1.
+    const isSingle = menu.mode === 'single' || menu.mode === 'unique';
+    const maxValues = isSingle ? 1 : (constraints.maxSelections ?? Math.max(menu.options.length, 1));
     message.selectMenu = {
       customId: selectCustomId(menu.id),
       placeholder: 'Choose roles…',
       minValues: 0,
-      maxValues: constraints.maxSelections ?? Math.max(menu.options.length, 1),
+      maxValues,
       options: menu.options.map((o: RoleMenuOptionRow) => ({
         label: o.label || o.roleId,
         value: o.roleId,

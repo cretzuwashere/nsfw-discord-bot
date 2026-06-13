@@ -59,6 +59,25 @@ Defense in depth in `packages/security`:
    text/html etc.), bounded queue (`MAX_QUEUE_SIZE`) and a max-duration
    playback timer cap resource use.
 
+## Known residual risks
+
+- **yt-dlp network egress is not covered by the SSRF guard.** Direct-HTTP
+  audio and avatar/background fetches go through `openSafeHttpStream`
+  (connection-time DNS-pinning, per-hop redirect re-validation). The
+  YouTube/SoundCloud/Spotify providers, however, hand the URL to the bundled
+  `yt-dlp` binary, which does its own DNS resolution and redirect-following
+  outside Node. The **entry host is constrained** to those known public
+  platforms (`canResolve`), so an attacker cannot point the provider at an
+  arbitrary host — but yt-dlp's sub-resource fetches are not IP-pinned. For
+  hardening in hostile multi-tenant environments, restrict the bot
+  container's egress at the network layer (firewall/proxy). Disable streaming
+  entirely with `AUDIO_ENABLE_STREAMING_SOURCES=false`.
+- **In-memory dedup/rate state assumes a single bot instance.** Welcome-join
+  dedup and the automod spam window live in process memory. Birthday and
+  announcement delivery dedup are DB-backed (durable). Running multiple bot
+  instances/shards for the same guild is not supported in v1 (see
+  docs/ASSUMPTIONS.md) — run a single bot worker.
+
 ## Error exposure
 
 `UserFacingError.safeMessage` is the **only** error text allowed to reach

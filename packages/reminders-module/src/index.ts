@@ -28,6 +28,7 @@ export interface RemindersModuleHandle {
 }
 
 const TICK_MS = 30_000;
+const RETRY_BACKOFF_MS = 2 * 60_000;
 const MAX_PER_USER = 25;
 
 export function createRemindersModule(options: RemindersModuleOptions): RemindersModuleHandle {
@@ -61,23 +62,28 @@ export function createRemindersModule(options: RemindersModuleOptions): Reminder
         .then(() => true)
         .catch(() => false);
     }
-    if (!service) return; // bot offline — retry next tick
+    if (!service) return; // bot offline — retry next tick (dueAt unchanged)
+
+    if (!delivered) {
+      // Send failed (online) — do NOT drop a one-off or skip a recurrence.
+      // Retry with a short backoff so the next tick attempts again.
+      await repo.reschedule(reminder.id, new Date(Date.now() + RETRY_BACKOFF_MS));
+      return;
+    }
 
     if (reminder.recurrenceSeconds && reminder.recurrenceSeconds > 0) {
       await repo.reschedule(reminder.id, new Date(Date.now() + reminder.recurrenceSeconds * 1000));
     } else {
       await repo.deactivate(reminder.id);
     }
-    if (delivered) {
-      await options.audit.record({
-        actorType: 'system',
-        action: 'reminder.delivered',
-        moduleKey: 'reminders',
-        guildId: guildExternalId ?? undefined,
-        targetType: 'user',
-        targetId: reminder.userExternalId,
-      });
-    }
+    await options.audit.record({
+      actorType: 'system',
+      action: 'reminder.delivered',
+      moduleKey: 'reminders',
+      guildId: guildExternalId ?? undefined,
+      targetType: 'user',
+      targetId: reminder.userExternalId,
+    });
   }
 
   async function guildExternal(guildId: string | null): Promise<string | undefined> {

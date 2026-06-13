@@ -18,6 +18,8 @@ export interface ScheduledJob {
 export class Scheduler {
   private readonly jobs: ScheduledJob[] = [];
   private readonly timers = new Map<string, NodeJS.Timeout>();
+  /** Jobs currently executing — prevents overlapping runs of the same job. */
+  private readonly inFlight = new Set<string>();
   private running = false;
 
   constructor(private readonly logger: Logger) {}
@@ -57,11 +59,21 @@ export class Scheduler {
   }
 
   private async execute(job: ScheduledJob): Promise<void> {
+    // Overlap guard: if the previous run of this job is still going (a slow
+    // tick), skip this tick rather than running concurrently — concurrent
+    // delivery jobs could otherwise double-send.
+    if (this.inFlight.has(job.name)) {
+      this.logger.warn({ job: job.name }, 'scheduled job still running; skipping this tick');
+      return;
+    }
+    this.inFlight.add(job.name);
     try {
       await job.run();
     } catch (error) {
       // A failing job must never crash the worker; the next tick retries.
       this.logger.error({ err: error, job: job.name }, 'scheduled job failed');
+    } finally {
+      this.inFlight.delete(job.name);
     }
   }
 }

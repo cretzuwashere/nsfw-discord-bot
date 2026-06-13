@@ -28,6 +28,7 @@ export interface ScheduledMessagesModuleHandle {
 }
 
 const TICK_MS = 30_000;
+const RETRY_BACKOFF_MS = 5 * 60_000;
 
 export function createScheduledMessagesModule(
   options: ScheduledMessagesModuleOptions
@@ -58,6 +59,7 @@ export function createScheduledMessagesModule(
       message.content = `@here ${message.content ?? ''}`.trim();
     }
 
+    let delivered = false;
     try {
       await service.sendMessage(row.channelId, message);
       await repo.recordRun(row.id, 'sent');
@@ -69,20 +71,35 @@ export function createScheduledMessagesModule(
         targetType: 'scheduled_message',
         targetId: row.id,
       });
+      delivered = true;
     } catch (error) {
       logger.warn({ err: error, id: row.id }, 'scheduled message send failed');
       await repo.recordRun(row.id, 'failed', 'delivery error');
-      await repo.update(row.id, { lastFailureReason: 'Delivery failed.' });
     }
 
-    // Schedule the next run (or stop one-offs).
-    const next = computeNextRun(
-      row.scheduleType as ScheduleType,
-      (row.scheduleConfig ?? {}) as ScheduleConfig,
-      row.timezone,
-      new Date()
-    );
-    await repo.update(row.id, { lastRunAt: new Date(), nextRunAt: next, paused: next === null ? true : row.paused });
+    if (delivered) {
+      // Advance to the next run, or stop one-offs.
+      const next = computeNextRun(
+        row.scheduleType as ScheduleType,
+        (row.scheduleConfig ?? {}) as ScheduleConfig,
+        row.timezone,
+        new Date()
+      );
+      await repo.update(row.id, {
+        lastRunAt: new Date(),
+        nextRunAt: next,
+        paused: next === null ? true : row.paused,
+        lastFailureReason: null,
+      });
+    } else {
+      // Delivery failed — DON'T drop a one-off or skip a recurrence. Retry
+      // with a short backoff; the admin sees the failed runs and can pause.
+      await repo.update(row.id, {
+        lastRunAt: new Date(),
+        nextRunAt: new Date(Date.now() + RETRY_BACKOFF_MS),
+        lastFailureReason: 'Delivery failed; will retry.',
+      });
+    }
   }
 
   const schedulerJob: ScheduledJob = {

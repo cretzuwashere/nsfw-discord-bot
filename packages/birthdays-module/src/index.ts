@@ -124,19 +124,24 @@ export function createBirthdaysModule(options: BirthdaysModuleOptions): Birthday
         const guild = await guilds.getById(settings.guildId).catch(() => undefined);
         if (!guild) continue;
 
-        const dateKey = announcementDateKey('UTC', settings.announceHour, now);
-        // Use each birthday's own timezone for the day match; gate by the
-        // guild's announce hour in UTC for simplicity + dedup.
-        if (!dateKey) continue;
+        // Gate by the guild's announce hour (UTC — birthday_settings has no
+        // timezone column); the per-birthday calendar match uses each user's
+        // own timezone below.
+        const gateKey = announcementDateKey('UTC', settings.announceHour, now);
+        if (!gateKey) continue;
 
         const service = options.guildServiceProvider.forGuild(guild.externalId);
         if (!service) continue;
 
-        const today = localMonthDay('UTC', now);
-        const birthdays = await repo.onMonthDay(settings.guildId, today.month, today.day);
-        for (const birthday of birthdays) {
-          const fresh = await repo.markAnnounced(settings.guildId, birthday.userExternalId, dateKey);
-          if (!fresh) continue;
+        const allBirthdays = await repo.forGuild(settings.guildId);
+        for (const birthday of allBirthdays) {
+          // Is it this birthday's month/day right now in ITS timezone?
+          const local = localMonthDay(birthday.timezone, now);
+          if (local.month !== birthday.month || local.day !== birthday.day) continue;
+
+          // Dedup on the user's local date so it announces once per local day.
+          const dateKey = `${local.year}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`;
+          if (await repo.hasAnnounced(settings.guildId, birthday.userExternalId, dateKey)) continue;
 
           const age = birthday.year ? computeAge(birthday.year, birthday.month, birthday.day, DateTime.fromJSDate(now)) : null;
           const data = buildPlaceholderData({
@@ -144,13 +149,23 @@ export function createBirthdaysModule(options: BirthdaysModuleOptions): Birthday
             server: { name: guild.name },
             birthday: age !== null ? { age } : undefined,
           });
-          await service
+
+          // Send FIRST; only record the dedup row after a confirmed delivery,
+          // so a transient failure retries on a later tick instead of being
+          // silently dropped.
+          const sent = await service
             .sendMessage(settings.announcementChannelId, {
               content: applyPlaceholders(settings.message, data),
               allowMentions: { everyone: false, roles: [], users: [birthday.userExternalId] },
             })
-            .catch((error) => logger.warn({ err: error }, 'birthday announcement failed'));
+            .then(() => true)
+            .catch((error) => {
+              logger.warn({ err: error }, 'birthday announcement failed');
+              return false;
+            });
+          if (!sent) continue;
 
+          await repo.markAnnounced(settings.guildId, birthday.userExternalId, dateKey);
           if (settings.roleEnabled && settings.roleId) {
             await service.addRole(birthday.userExternalId, settings.roleId, 'birthday').catch(() => {});
           }
