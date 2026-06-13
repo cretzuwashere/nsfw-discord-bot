@@ -158,6 +158,9 @@ importers:
       '@botplatform/announcements-module':
         specifier: workspace:*
         version: link:../../packages/announcements-module
+      '@botplatform/birthdays-module':
+        specifier: workspace:*
+        version: link:../../packages/birthdays-module
       '@botplatform/cards-module':
         specifier: workspace:*
         version: link:../../packages/cards-module
@@ -242,7 +245,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
 
   apps/bot:
     dependencies:
@@ -252,6 +255,9 @@ importers:
       '@botplatform/audio-module':
         specifier: workspace:*
         version: link:../../packages/audio-module
+      '@botplatform/birthdays-module':
+        specifier: workspace:*
+        version: link:../../packages/birthdays-module
       '@botplatform/cards-module':
         specifier: workspace:*
         version: link:../../packages/cards-module
@@ -276,6 +282,9 @@ importers:
       '@botplatform/moderation-module':
         specifier: workspace:*
         version: link:../../packages/moderation-module
+      '@botplatform/reminders-module':
+        specifier: workspace:*
+        version: link:../../packages/reminders-module
       '@botplatform/role-menus-module':
         specifier: workspace:*
         version: link:../../packages/role-menus-module
@@ -318,7 +327,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(tsx@4.22.4))
 
   packages/announcements-module:
     dependencies:
@@ -372,6 +381,43 @@ importers:
         specifier: workspace:*
         version: link:../shared
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/birthdays-module:
+    dependencies:
+      '@botplatform/config':
+        specifier: workspace:*
+        version: link:../config
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+      luxon:
+        specifier: 'catalog:'
+        version: 3.7.2
+    devDependencies:
+      '@types/luxon':
+        specifier: 'catalog:'
+        version: 3.7.1
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.2
@@ -579,6 +625,37 @@ importers:
         version: 5.9.3
 
   packages/moderation-module:
+    dependencies:
+      '@botplatform/config':
+        specifier: workspace:*
+        version: link:../config
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/reminders-module:
     dependencies:
       '@botplatform/config':
         specifier: workspace:*

@@ -1,0 +1,71 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const s = settings || {}; %>
+<h1>Birthdays</h1>
+<% if (saved) { %><div class="alert alert-ok" role="status">Settings saved.</div><% } %>
+<div class="alert alert-ok" role="note">Birthdays are <strong>opt-in</strong>: members add their own with
+<code>/birthday set</code> and can delete them with <code>/birthday remove</code>. See docs/PRIVACY.md.</div>
+
+<% if (guilds.length === 0) { %>
+  <section class="card"><p class="muted">No servers yet.</p></section>
+<% } else { %>
+<section class="card">
+  <form method="post" action="/birthdays/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId" onchange="location.href='/birthdays?guild='+this.value">
+      <% for (const g of guilds) { %><option value="<%= g.id %>" <%= selectedGuildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option><% } %>
+    </select>
+
+    <label class="checkbox-label"><input type="checkbox" name="enabled" <%= s.enabled ? 'checked' : '' %>> Enable birthday announcements</label>
+    <label for="announcementChannelId">Announcement channel ID</label>
+    <input id="announcementChannelId" name="announcementChannelId" type="text" value="<%= s.announcementChannelId || '' %>">
+    <label for="message">Message ({{user.mention}}, {{birthday.age}}, {{server.name}})</label>
+    <textarea id="message" name="message" rows="2"><%= s.message || '🎉 Happy birthday {{user.mention}}!' %></textarea>
+    <label for="cardTemplateId">Birthday card template (optional)</label>
+    <select id="cardTemplateId" name="cardTemplateId">
+      <option value="">— none —</option>
+      <% for (const t of cardTemplates) { %><option value="<%= t.id %>" <%= s.cardTemplateId === t.id ? 'selected' : '' %>><%= t.name %></option><% } %>
+    </select>
+    <label for="announceHour">Announce hour (0–23, UTC)</label>
+    <input id="announceHour" name="announceHour" type="number" min="0" max="23" value="<%= s.announceHour ?? 9 %>">
+
+    <label class="checkbox-label"><input type="checkbox" name="roleEnabled" <%= s.roleEnabled ? 'checked' : '' %>> Give a temporary birthday role</label>
+    <label for="roleId">Birthday role ID</label>
+    <input id="roleId" name="roleId" type="text" value="<%= s.roleId || '' %>">
+    <label for="roleDurationHours">Role duration (hours)</label>
+    <input id="roleDurationHours" name="roleDurationHours" type="number" min="1" max="168" value="<%= s.roleDurationHours ?? 24 %>">
+
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Stored birthdays (visible)</h2>
+  <% if (!upcoming || upcoming.length === 0) { %>
+    <p class="muted">No visible birthdays. Members add their own via <code>/birthday set</code>.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>User</th><th>Date</th><th>Visibility</th><th></th></tr></thead>
+      <tbody>
+        <% for (const b of upcoming) { %>
+          <tr>
+            <td class="muted small"><%= b.userExternalId %></td>
+            <td><%= b.month %>/<%= b.day %></td>
+            <td><%= b.visibility %></td>
+            <td>
+              <form method="post" action="/birthdays/delete" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="hidden" name="guildId" value="<%= selectedGuildId %>">
+                <input type="hidden" name="userExternalId" value="<%= b.userExternalId %>">
+                <button type="submit" class="btn btn-warn">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<% } %>
+<%- include('partials/footer') %>

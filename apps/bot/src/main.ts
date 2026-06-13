@@ -1,7 +1,9 @@
 import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
+import { createBirthdaysModule } from '@botplatform/birthdays-module';
 import { createCardsModule } from '@botplatform/cards-module';
 import { createCustomCommandsModule } from '@botplatform/custom-commands-module';
+import { createRemindersModule } from '@botplatform/reminders-module';
 import { createRoleMenusModule } from '@botplatform/role-menus-module';
 import { createScheduledMessagesModule } from '@botplatform/scheduled-messages-module';
 import { createWelcomeModule } from '@botplatform/welcome-module';
@@ -82,6 +84,20 @@ async function main(): Promise<void> {
     guildServiceProvider: adapter,
   });
   const customCommandsHandle = createCustomCommandsModule({ config, logger, db: database.db, audit });
+  const remindersHandle = createRemindersModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+  });
+  const birthdaysHandle = createBirthdaysModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+  });
   adapter.onGuildSeen = (externalId, name) => {
     void guildsRepo
       .upsertByExternalId({ adapterKey: ADAPTER_KEYS.discord, externalId, name })
@@ -102,6 +118,8 @@ async function main(): Promise<void> {
       roleMenusHandle.module,
       scheduledMessagesHandle.module,
       customCommandsHandle.module,
+      remindersHandle.module,
+      birthdaysHandle.module,
     ],
     adapters: [adapter],
     audit,
@@ -115,6 +133,8 @@ async function main(): Promise<void> {
   // Scheduler jobs contributed by modules.
   kernel.scheduler.register(announcementsHandle.schedulerJob);
   kernel.scheduler.register(scheduledMessagesHandle.schedulerJob);
+  kernel.scheduler.register(remindersHandle.schedulerJob);
+  kernel.scheduler.register(birthdaysHandle.schedulerJob);
 
   kernel.health.register(createDbHealthIndicator(database.db));
   kernel.health.register({

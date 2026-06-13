@@ -13,8 +13,10 @@
   "dependencies": {
     "@botplatform/announcements-module": "workspace:*",
     "@botplatform/audio-module": "workspace:*",
+    "@botplatform/birthdays-module": "workspace:*",
     "@botplatform/cards-module": "workspace:*",
     "@botplatform/custom-commands-module": "workspace:*",
+    "@botplatform/reminders-module": "workspace:*",
     "@botplatform/welcome-module": "workspace:*",
     "@botplatform/role-menus-module": "workspace:*",
     "@botplatform/scheduled-messages-module": "workspace:*",
