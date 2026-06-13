@@ -20,6 +20,12 @@ via `ADMIN_PORT` / `PUBLIC_ADMIN_URL`).
 
 ## Pages
 
+The panel has a page per module. Community-module pages
+(Announcements, Dynamic Cards, Welcome/Leave, Reaction Roles, Birthdays,
+Reminders, Scheduled Messages, Auto-Moderation, Custom Commands) each provide
+the create/edit/configure UI for that module — see the per-module docs linked
+from [COMMUNITY_MODULES.md](COMMUNITY_MODULES.md). The core pages:
+
 | Page | What it shows / does |
 |------|----------------------|
 | **Dashboard** | Bot worker status via its internal API (adapters with connection state + identity + server count, uptime, version, environment), database health, active modules, audio session count, 10 most recent audit entries. Shows an honest "unreachable" card when the bot container is down. |

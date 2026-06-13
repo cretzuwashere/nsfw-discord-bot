@@ -1,9 +1,16 @@
 # Moderation Roadmap
 
-Status: **v1 = foundation only.** The moderation module
-(`packages/moderation-module`) ships services and persistence plumbing but **no
-slash commands** (`module.commands` is `[]`). This document is the plan for
-turning the foundation into real moderation features, in dependency order.
+> **Update:** moderation **commands are now implemented** — see
+> [docs/MODERATION.md](MODERATION.md) for the shipped feature
+> (`/warn`, `/timeout`, `/kick`, `/ban`, `/purge`, `/slowmode`, `/lock`, …,
+> with moderation cases and a mod-log) and [docs/AUTOMOD.md](AUTOMOD.md) for
+> auto-moderation. This document remains as the original design/roadmap and
+> covers what is still future work (e.g. an appeals workflow, scheduled
+> unbans, a full permissions editor UI).
+
+This document is the original plan for turning the foundation into real
+moderation features, in dependency order. Items marked here that now exist are
+documented in MODERATION.md.
 
 ## 1. What exists today (v1 foundation)
 

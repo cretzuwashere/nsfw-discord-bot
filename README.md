@@ -12,20 +12,33 @@ and the Playwright browsers all live inside Linux containers.
 
 ## Current features
 
-- 🎵 **Audio player module** — `/join`, `/leave`, `/play url:<link>`, `/queue`,
-  `/skip`, `/pause`, `/resume`, `/stop`, `/nowplaying` with a bounded queue,
-  graceful error handling and SSRF-hardened link validation
-- 🛡️ **Moderation foundation** — warnings, action records, configurable rules
-  and role→permission mappings persisted and visible in the admin panel
-  (slash commands arrive per the [roadmap](docs/MODERATION_ROADMAP.md))
-- 🖥️ **Admin panel** (http://localhost:3000) — dashboard, module toggles, live
-  audio sessions with skip/stop/clear actions, guild settings, audit logs,
-  system settings; argon2 passwords, encrypted session cookies, CSRF
-  protection, login rate limiting
-- 🗄️ **PostgreSQL persistence** — modules, guild settings, playback history,
-  queue mirror, moderation records, audit logs; SQL migrations via Drizzle
-- 🔍 **Health endpoints** for every service + Docker healthchecks
-- ✅ **Three test layers** — 182 unit, 37 integration, 22 Playwright e2e —
+A modular community-management suite — every feature is a module you can
+enable, disable, configure, test and audit:
+
+- 🎵 **Audio Player** — `/play` from **YouTube, SoundCloud, Spotify** or direct
+  links; queue, skip, pause/resume, stop, now-playing; SSRF-hardened, yt-dlp
+  powered ([docs](docs/AUDIO_SOURCES.md))
+- 📣 **Announcements** — create/schedule/send rich announcements from the panel,
+  with mass-mention safety ([docs](docs/ANNOUNCEMENTS.md))
+- 🖼️ **Dynamic Cards** — generate welcome/birthday/banner images (SVG→PNG, no
+  external AI) ([docs](docs/DYNAMIC_CARDS.md))
+- 👋 **Welcome / Leave** — messages, cards, DMs, auto-roles, delay ([docs](docs/COMMUNITY_MODULES.md))
+- 🎭 **Reaction / Button / Select Roles** — self-assignable roles with rich
+  modes and constraints ([docs](docs/REACTION_ROLES.md))
+- 🎂 **Birthdays & ⏰ Reminders** — opt-in, timezone-aware, privacy-first
+  ([docs](docs/BIRTHDAYS_AND_REMINDERS.md), [privacy](docs/PRIVACY.md))
+- 🗓️ **Scheduled Messages** — once/daily/weekly/monthly/cron ([docs](docs/SCHEDULED_MESSAGES.md))
+- 🛡️ **Moderation** — warn/timeout/kick/ban/purge/slowmode/lock with case
+  logging + mod-log ([docs](docs/MODERATION.md))
+- 🤖 **Auto-Moderation** — banned words, spam, mentions, caps, invites, links,
+  escalation ([docs](docs/AUTOMOD.md))
+- 💬 **Custom Commands** — text/embed/random/link responses ([docs](docs/CUSTOM_COMMANDS.md))
+- 🖥️ **Admin panel** (http://localhost:3000) — a page per module, live bot
+  status, audit logs; argon2 passwords, encrypted sessions, CSRF, rate
+  limiting, RBAC foundation ([docs](docs/ADMIN_PANEL.md))
+- 🗄️ **PostgreSQL persistence** (32 tables) with SQL migrations via Drizzle
+- 🔍 **Health endpoints** + Docker healthchecks; structured logging
+- ✅ **Three test layers** — 314 unit, 37 integration, 23 Playwright e2e —
   plus a GitHub Actions pipeline that runs the identical Docker workflow
 
 ## Quick start (Windows, macOS or Linux — only Docker required)
@@ -58,23 +71,26 @@ first run.
 
 ## Slash commands
 
-| Command | Behavior |
-|---------|----------|
-| `/join` | Join your current voice channel |
-| `/leave` | Leave the channel (stops playback safely) |
-| `/play url:<link>` | Validate + resolve the link; play now or queue |
-| `/queue` | Show now playing + upcoming tracks |
-| `/skip` | Skip to the next track (stops cleanly when queue is empty) |
-| `/pause` / `/resume` | Pause / resume with honest edge-case replies |
-| `/stop` | Stop and clear the queue, stay connected |
-| `/nowplaying` | Title, source, status, requester |
+| Module | Commands |
+|--------|----------|
+| Audio | `/join` `/leave` `/play url:<link>` `/queue` `/skip` `/pause` `/resume` `/stop` `/nowplaying` |
+| Announcements | `/announcement preview\|send\|list\|cancel` |
+| Reaction Roles | `/roles menu\|list\|refresh\|remove` |
+| Birthdays | `/birthday set\|view\|remove\|upcoming` |
+| Reminders | `/reminder create\|list\|remove` |
+| Moderation | `/warn` `/warnings` `/clearwarnings` `/timeout` `/untimeout` `/kick` `/ban` `/unban` `/purge` `/slowmode` `/lock` `/unlock` |
+| Custom | `/custom name:<name>` |
 
-Supported sources: **YouTube**, **SoundCloud**, **Spotify** (single tracks —
-resolved to the best audio match) and **direct HTTP(S) audio files**
-(mp3/ogg/wav/m4a/…). Streaming sources are powered by `yt-dlp` bundled in the
-Docker images (toggle with `AUDIO_ENABLE_STREAMING_SOURCES`). Private and
-internal addresses are blocked; an optional allowlist is available via
-`ALLOWED_AUDIO_DOMAINS`. The provider layer is extensible for future sources.
+Register them after configuring Discord with
+`docker compose exec app pnpm discord:register-commands`. Welcome, Dynamic
+Cards, Scheduled Messages and Auto-Moderation are event/scheduler-driven and
+configured entirely from the admin panel.
+
+Audio sources: **YouTube**, **SoundCloud**, **Spotify** (single tracks →
+best audio match) and **direct HTTP(S) audio files**, powered by `yt-dlp`
+bundled in the Docker images. Private/internal addresses are blocked; an
+optional allowlist is available via `ALLOWED_AUDIO_DOMAINS`. See
+[docs/AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md).
 
 ## Architecture (short version)
 
@@ -172,3 +188,9 @@ and [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Fixes incl. Windows specifics |
 | [MODERATION_ROADMAP.md](docs/MODERATION_ROADMAP.md) | Future moderation design |
 | [ASSUMPTIONS.md](docs/ASSUMPTIONS.md) | Autonomous decisions + how to change them |
+| [COMMUNITY_MODULES.md](docs/COMMUNITY_MODULES.md) | Overview of every module |
+| [ANNOUNCEMENTS](docs/ANNOUNCEMENTS.md) · [DYNAMIC_CARDS](docs/DYNAMIC_CARDS.md) · [REACTION_ROLES](docs/REACTION_ROLES.md) | Per-module guides |
+| [BIRTHDAYS_AND_REMINDERS](docs/BIRTHDAYS_AND_REMINDERS.md) · [SCHEDULED_MESSAGES](docs/SCHEDULED_MESSAGES.md) | Per-module guides |
+| [MODERATION](docs/MODERATION.md) · [AUTOMOD](docs/AUTOMOD.md) · [CUSTOM_COMMANDS](docs/CUSTOM_COMMANDS.md) | Per-module guides |
+| [AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md) | YouTube/SoundCloud/Spotify + direct links |
+| [PRIVACY.md](docs/PRIVACY.md) · [PERMISSIONS.md](docs/PERMISSIONS.md) | Data handling + permission model |

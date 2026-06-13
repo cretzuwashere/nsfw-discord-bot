@@ -1,8 +1,12 @@
 # Testing
 
 Three layers, all executed **inside Docker** — never on the Windows host.
-Current counts (all passing in validation): **182 unit / 37 integration /
-22 e2e (+1 conditional skip)**.
+Current counts (all passing in validation): **314 unit / 37 integration /
+23 e2e**. Every community module ships unit tests for its pure logic
+(announcement validation + mass-mention safety, card rendering/placeholders/
+storage, role-menu role-change computation, schedule next-run with timezones
++ cron, reminder duration parsing, birthday date logic, moderation command
+guards, automod rule matching, custom-command rendering).
 
 ## Unit tests (vitest, no I/O)
 
