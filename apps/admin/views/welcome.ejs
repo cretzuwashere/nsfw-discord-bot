@@ -37,6 +37,11 @@
     <textarea id="dmMessage" name="dmMessage" rows="2"><%= s.dmMessage || '' %></textarea>
     <label for="autoRoleIds">Auto-role IDs on join (comma or newline separated)</label>
     <textarea id="autoRoleIds" name="autoRoleIds" rows="2"><%= Array.isArray(s.autoRoleIds) ? s.autoRoleIds.join(', ') : '' %></textarea>
+    <p class="muted small">Every new member is given these roles automatically — this works
+    on its own, even with welcome messages off, <strong>as long as the Welcome / Leave module is
+    enabled</strong> on the <a href="/modules">Modules</a> page and the <strong>Server Members</strong>
+    intent is on. The bot also needs the <strong>Manage Roles</strong> permission, and its own role
+    must sit <strong>above</strong> each auto-role in Server Settings → Roles.</p>
     <label for="delaySeconds">Delay before welcome (seconds, 0–3600)</label>
     <input id="delaySeconds" name="delaySeconds" type="number" min="0" max="3600" value="<%= s.delaySeconds ?? 0 %>">
     <label for="rulesChannelId">Rules channel ID (optional, for {{rules}} reference)</label>

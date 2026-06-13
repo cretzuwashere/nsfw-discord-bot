@@ -101,7 +101,7 @@ in the Discord developer portal:
 | --- | --- | --- | --- |
 | `Guilds` | no | all | base intent |
 | `GuildVoiceStates` | no | audio-player | voice connections |
-| `GuildMembers` | **yes** | welcome, birthdays (roles) | join/leave + auto-roles |
+| `GuildMembers` | **yes** | welcome, birthdays (roles) | join/leave + auto-roles; gated by `DISCORD_ENABLE_GUILD_MEMBERS`; without it the bot receives no join events so welcome + auto-roles never fire |
 | `GuildMessages` | no | automod | message events |
 | `GuildModeration` | no | moderation | ban/audit events |
 | `MessageContent` | **yes** | automod (content rules) | gated by `DISCORD_ENABLE_MESSAGE_CONTENT`; without it, content rules run **DEGRADED** |
@@ -219,15 +219,21 @@ Sends welcome and leave messages, can post a rendered welcome card, send a DM,
 assign auto-roles, and apply a delay. Driven entirely by the `member.join` and
 `member.leave` platform events — **no slash commands**.
 
+**Auto-roles** are independent of the welcome message: set one or more role IDs
+in the `/welcome` admin page and every new member receives them on join — even
+with welcome messages disabled, and immediately (the *Delay before welcome*
+setting only delays the message, not the role). The bot must have **Manage
+Roles** and its own role must sit **above** each auto-role.
+
 - **Admin page:** `/welcome` ([`apps/admin/views/welcome.ejs`](../apps/admin/views/welcome.ejs);
   route [`apps/admin/src/routes/welcome.ts`](../apps/admin/src/routes/welcome.ts))
 - **Permissions/intents:** `SendMessages`, `ManageRoles`, `AttachFiles`;
   **`GuildMembers`** (privileged)
 - **Tables:** `welcome_settings`
-- **Audit events:** `welcome.sent`, `welcome.leave`
+- **Audit events:** `welcome.sent`, `welcome.leave`, `welcome.autorole`
 - **Note:** auto-roles require the bot's role to be **above** the granted roles
   in the role hierarchy. Cards require the Dynamic Cards module.
-- **Docs:** [`WELCOME.md`](./WELCOME.md)
+- **Docs:** privileged intents + invite permissions in [`DISCORD_SETUP.md`](./DISCORD_SETUP.md)
 
 ### Reaction Roles — `role-menus` — disabled by default
 

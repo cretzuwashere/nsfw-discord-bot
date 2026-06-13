@@ -46,6 +46,7 @@ function makeHarness(settingsRow: WelcomeSettingsRow | undefined, options: { rea
   const roles: Array<{ userId: string; roleId: string }> = [];
   const dms: string[] = [];
   const auditEntries: AuditEntry[] = [];
+  const failingRoles = new Set<string>();
 
   const service: GuildService = {
     guildExternalId: 'ext-guild',
@@ -54,6 +55,7 @@ function makeHarness(settingsRow: WelcomeSettingsRow | undefined, options: { rea
       return { channelId, messageId: 'm-1' };
     }),
     addRole: vi.fn(async (userId: string, roleId: string) => {
+      if (failingRoles.has(roleId)) throw new Error(`cannot manage role ${roleId}`);
       roles.push({ userId, roleId });
     }),
     sendDirectMessage: vi.fn(async (_userId: string, msg) => {
@@ -82,7 +84,7 @@ function makeHarness(settingsRow: WelcomeSettingsRow | undefined, options: { rea
     renderCard,
   });
 
-  return { svc, sent, roles, dms, auditEntries, renderCard };
+  return { svc, sent, roles, dms, auditEntries, renderCard, failRole: (roleId: string) => failingRoles.add(roleId) };
 }
 
 beforeEach(() => vi.useRealTimers());
@@ -109,6 +111,49 @@ describe('WelcomeService.handleJoin', () => {
       { userId: 'u-1', roleId: 'r1' },
       { userId: 'u-1', roleId: 'r2' },
     ]);
+  });
+
+  it('assigns auto-roles even when the welcome message is disabled', async () => {
+    const h = makeHarness(settings({ welcomeEnabled: false, autoRoleIds: ['r-member'] }));
+    await h.svc.handleJoin(joinEvent());
+    expect(h.roles).toEqual([{ userId: 'u-1', roleId: 'r-member' }]);
+    expect(h.sent).toHaveLength(0); // no welcome message sent
+    expect(h.auditEntries.some((e) => e.action === 'welcome.autorole')).toBe(true);
+  });
+
+  it('assigns auto-roles immediately, before the welcome delay elapses', async () => {
+    vi.useFakeTimers();
+    const h = makeHarness(settings({ delaySeconds: 30, autoRoleIds: ['r-member'] }));
+    await h.svc.handleJoin(joinEvent());
+    expect(h.roles).toEqual([{ userId: 'u-1', roleId: 'r-member' }]); // assigned now
+    expect(h.sent).toHaveLength(0); // message still pending
+    await vi.advanceTimersByTimeAsync(30_100);
+    expect(h.sent).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it('keeps assigning the remaining roles when one fails', async () => {
+    const h = makeHarness(settings({ welcomeEnabled: false, autoRoleIds: ['bad', 'good'] }));
+    h.failRole('bad');
+    await h.svc.handleJoin(joinEvent());
+    expect(h.roles).toEqual([{ userId: 'u-1', roleId: 'good' }]);
+    expect(h.auditEntries.some((e) => e.action === 'welcome.autorole')).toBe(true);
+  });
+
+  it('records no autorole audit when every role fails to assign', async () => {
+    const h = makeHarness(settings({ welcomeEnabled: false, autoRoleIds: ['bad'] }));
+    h.failRole('bad');
+    await h.svc.handleJoin(joinEvent());
+    expect(h.roles).toHaveLength(0);
+    expect(h.auditEntries.some((e) => e.action === 'welcome.autorole')).toBe(false);
+  });
+
+  it('assigns auto-roles exactly once across a rapid duplicate join', async () => {
+    const h = makeHarness(settings({ autoRoleIds: ['r1'] }));
+    await h.svc.handleJoin(joinEvent());
+    await h.svc.handleJoin(joinEvent());
+    expect(h.roles).toEqual([{ userId: 'u-1', roleId: 'r1' }]); // not assigned twice
+    expect(h.sent).toHaveLength(1);
   });
 
   it('sends a DM when enabled', async () => {

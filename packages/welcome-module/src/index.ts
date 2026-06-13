@@ -46,7 +46,7 @@ export function createWelcomeModule(options: WelcomeModuleOptions): WelcomeModul
     metadata: {
       requiredPermissions: ['SendMessages', 'ManageRoles', 'AttachFiles'],
       requiredIntents: ['GuildMembers'],
-      auditEvents: ['welcome.sent', 'welcome.leave'],
+      auditEvents: ['welcome.sent', 'welcome.leave', 'welcome.autorole'],
     },
     commands: [],
     events: [

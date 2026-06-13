@@ -49,7 +49,45 @@ export function createWelcomeService(deps: WelcomeServiceDeps) {
       name: event.guild.name,
     });
     const settings = await welcome.get(guild.id);
-    if (!settings || !settings.welcomeEnabled) return;
+    // Nothing to do unless auto-roles OR the welcome message are configured.
+    if (!settings || (!settings.welcomeEnabled && settings.autoRoleIds.length === 0)) return;
+
+    // Auto-roles are assigned on EVERY join when configured — independent of
+    // the welcome-message toggle, and immediately (not subject to the welcome
+    // delay): a new member should receive their role the moment they arrive.
+    // A role can't be granted while the bot is offline, so this resolves a live
+    // service now; addRole validates Manage-Roles permission + role hierarchy
+    // and throws a clean error otherwise, so a misconfigured role never breaks
+    // the join.
+    if (settings.autoRoleIds.length > 0) {
+      const service = guildServiceProvider.forGuild(event.guild.externalId);
+      if (service) {
+        let assigned = 0;
+        for (const roleId of settings.autoRoleIds) {
+          try {
+            await service.addRole(event.user.externalId, roleId, 'welcome auto-role');
+            assigned += 1;
+          } catch (error) {
+            logger.warn({ err: error, roleId }, 'welcome auto-role failed');
+          }
+        }
+        if (assigned > 0) {
+          await audit.record({
+            actorType: 'system',
+            action: 'welcome.autorole',
+            moduleKey: 'welcome',
+            guildId: event.guild.externalId,
+            targetType: 'user',
+            targetId: event.user.externalId,
+          });
+        }
+      }
+    }
+
+    // The welcome message / card / DM are gated on the toggle and may be
+    // delayed. Resolve the service at send time so a delayed message survives
+    // a brief disconnect within the delay window.
+    if (!settings.welcomeEnabled) return;
 
     const run = async () => {
       const service = guildServiceProvider.forGuild(event.guild.externalId);
@@ -64,13 +102,6 @@ export function createWelcomeService(deps: WelcomeServiceDeps) {
         },
         server: { name: event.guild.name, memberCount: event.memberCount },
       });
-
-      // Auto-roles (each validated for hierarchy by the GuildService).
-      for (const roleId of settings.autoRoleIds) {
-        await service.addRole(event.user.externalId, roleId, 'welcome auto-role').catch((error) => {
-          logger.warn({ err: error, roleId }, 'welcome auto-role failed');
-        });
-      }
 
       // Welcome message + optional card.
       if (settings.welcomeChannelId) {
