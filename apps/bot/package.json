@@ -16,6 +16,7 @@
     "@botplatform/cards-module": "workspace:*",
     "@botplatform/welcome-module": "workspace:*",
     "@botplatform/role-menus-module": "workspace:*",
+    "@botplatform/scheduled-messages-module": "workspace:*",
     "@botplatform/config": "workspace:*",
     "@botplatform/core": "workspace:*",
     "@botplatform/database": "workspace:*",

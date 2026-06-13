@@ -1,0 +1,72 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const m = item || {}; const isNew = !m.id; const cfg = m.scheduleConfig || {}; %>
+<h1><%= isNew ? 'New Scheduled Message' : 'Edit Scheduled Message' %></h1>
+<% for (const error of (errors || [])) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+
+<section class="card">
+  <form method="post" action="/scheduled-messages/<%= m.id || 'new' %>/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId">
+      <% for (const g of guilds) { %><option value="<%= g.id %>" <%= m.guildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option><% } %>
+    </select>
+
+    <label for="name">Name</label>
+    <input id="name" name="name" type="text" value="<%= m.name || '' %>">
+    <label for="channelId">Channel ID</label>
+    <input id="channelId" name="channelId" type="text" value="<%= m.channelId || '' %>" required>
+    <label for="content">Message content</label>
+    <textarea id="content" name="content" rows="4" required><%= m.content || '' %></textarea>
+
+    <label for="mentionMode">Mentions</label>
+    <select id="mentionMode" name="mentionMode">
+      <% for (const mm of ['none','here','everyone','roles']) { %><option value="<%= mm %>" <%= m.mentionMode === mm ? 'selected' : '' %>><%= mm %></option><% } %>
+    </select>
+    <label for="mentionRoleIds">Role IDs (for "roles" mode, comma-separated)</label>
+    <input id="mentionRoleIds" name="mentionRoleIds" type="text" value="<%= Array.isArray(m.mentionRoleIds) ? m.mentionRoleIds.join(', ') : '' %>">
+
+    <label for="scheduleType">Schedule type</label>
+    <select id="scheduleType" name="scheduleType">
+      <% for (const st of scheduleTypes) { %><option value="<%= st %>" <%= m.scheduleType === st ? 'selected' : '' %>><%= st %></option><% } %>
+    </select>
+
+    <label for="timezone">Timezone (IANA, e.g. Europe/Bucharest)</label>
+    <input id="timezone" name="timezone" type="text" value="<%= m.timezone || 'UTC' %>">
+
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:0.5rem 1rem;margin-top:1rem">
+      <legend class="muted small">Schedule details (fill what applies to the type)</legend>
+      <label for="at">Once — date/time</label>
+      <input id="at" name="at" type="datetime-local" value="<%= cfg.at || '' %>">
+      <label for="intervalSeconds">Interval — seconds (min 60)</label>
+      <input id="intervalSeconds" name="intervalSeconds" type="number" min="60" value="<%= cfg.intervalSeconds || '' %>">
+      <label for="hour">Daily/Weekly/Monthly — hour (0–23) / minute (0–59)</label>
+      <input id="hour" name="hour" type="number" min="0" max="23" value="<%= cfg.hour ?? '' %>" placeholder="hour">
+      <input id="minute" name="minute" type="number" min="0" max="59" value="<%= cfg.minute ?? '' %>" placeholder="minute">
+      <label for="weekday">Weekly — day (0=Sun … 6=Sat)</label>
+      <input id="weekday" name="weekday" type="number" min="0" max="6" value="<%= cfg.weekday ?? '' %>">
+      <label for="day">Monthly — day of month (1–28)</label>
+      <input id="day" name="day" type="number" min="1" max="28" value="<%= cfg.day ?? '' %>">
+      <label for="expression">Cron — expression (5 fields)</label>
+      <input id="expression" name="expression" type="text" value="<%= cfg.expression || '' %>" placeholder="0 9 * * 1">
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-ghost" href="/scheduled-messages">Back</a>
+  </form>
+</section>
+
+<% if (!isNew && runs && runs.length) { %>
+<section class="card">
+  <h2>Recent runs</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      <% for (const r of runs) { %>
+        <tr><td class="nowrap"><%= r.ranAt.toISOString().slice(0,16).replace('T',' ') %></td><td><%= r.status %></td><td class="muted"><%= r.detail || '' %></td></tr>
+      <% } %>
+    </tbody>
+  </table>
+</section>
+<% } %>
+<%- include('partials/footer') %>

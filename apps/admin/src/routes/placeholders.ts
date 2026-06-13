@@ -8,7 +8,6 @@ import type { AdminRouteContext, AdminRoutePlugin } from './context.js';
 const PLACEHOLDER_PAGES: Array<{ path: string; title: string; description: string }> = [
   { path: '/birthdays', title: 'Birthdays', description: 'Opt-in birthday announcements, roles and cards.' },
   { path: '/reminders', title: 'Reminders', description: 'Personal and server reminders, recurring and timezone-aware.' },
-  { path: '/scheduled-messages', title: 'Scheduled Messages', description: 'Schedule one-off and recurring messages to channels.' },
   { path: '/automod', title: 'Auto-Moderation', description: 'Banned words, spam, mention and link filtering with escalation.' },
   { path: '/custom-commands', title: 'Custom Commands', description: 'Create text, embed and random-response commands.' },
   { path: '/permissions', title: 'Permissions', description: 'Map platform roles to module permissions.' },

@@ -1,0 +1,39 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Scheduled Messages</h1>
+<% if (message) { %><div class="alert alert-ok" role="status"><%= message.replace(/\+/g, ' ') %></div><% } %>
+
+<section class="card">
+  <p><a class="btn btn-primary" href="/scheduled-messages/new">New scheduled message</a></p>
+  <% if (guilds.length === 0) { %>
+    <p class="muted">No servers yet.</p>
+  <% } else if (messages.length === 0) { %>
+    <p class="muted">No scheduled messages yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Name</th><th>Channel</th><th>Schedule</th><th>Next run</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% for (const m of messages) { %>
+          <tr>
+            <td><a href="/scheduled-messages/<%= m.id %>"><%= m.name || '(unnamed)' %></a></td>
+            <td class="muted small"><%= m.channelId %></td>
+            <td><%= m.scheduleType %></td>
+            <td class="nowrap muted small"><%= m.nextRunAt ? m.nextRunAt.toISOString().slice(0, 16).replace('T', ' ') : '—' %></td>
+            <td><span class="badge badge-<%= m.paused ? 'muted' : 'ok' %>"><%= m.paused ? 'Paused' : 'Active' %></span></td>
+            <td class="nowrap">
+              <form method="post" action="/scheduled-messages/<%= m.id %>/<%= m.paused ? 'resume' : 'pause' %>" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-ghost"><%= m.paused ? 'Resume' : 'Pause' %></button>
+              </form>
+              <form method="post" action="/scheduled-messages/<%= m.id %>/delete" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-warn">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

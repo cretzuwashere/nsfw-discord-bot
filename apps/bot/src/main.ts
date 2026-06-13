@@ -2,6 +2,7 @@ import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
 import { createCardsModule } from '@botplatform/cards-module';
 import { createRoleMenusModule } from '@botplatform/role-menus-module';
+import { createScheduledMessagesModule } from '@botplatform/scheduled-messages-module';
 import { createWelcomeModule } from '@botplatform/welcome-module';
 import { loadConfig } from '@botplatform/config';
 import { BotKernel, CachedModuleState } from '@botplatform/core';
@@ -71,6 +72,13 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: adapter,
   });
+  const scheduledMessagesHandle = createScheduledMessagesModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+  });
   adapter.onGuildSeen = (externalId, name) => {
     void guildsRepo
       .upsertByExternalId({ adapterKey: ADAPTER_KEYS.discord, externalId, name })
@@ -89,6 +97,7 @@ async function main(): Promise<void> {
       cardsHandle.module,
       welcomeHandle.module,
       roleMenusHandle.module,
+      scheduledMessagesHandle.module,
     ],
     adapters: [adapter],
     audit,
@@ -101,6 +110,7 @@ async function main(): Promise<void> {
 
   // Scheduler jobs contributed by modules.
   kernel.scheduler.register(announcementsHandle.schedulerJob);
+  kernel.scheduler.register(scheduledMessagesHandle.schedulerJob);
 
   kernel.health.register(createDbHealthIndicator(database.db));
   kernel.health.register({

@@ -3,6 +3,7 @@ import { registerAnnouncementRoutes } from './announcements.js';
 import { registerCardsRoutes } from './cards.js';
 import { registerPlaceholderRoutes } from './placeholders.js';
 import { registerRoleMenuRoutes } from './role-menus.js';
+import { registerScheduledMessageRoutes } from './scheduled-messages.js';
 import { registerWelcomeRoutes } from './welcome.js';
 
 /**
@@ -15,6 +16,7 @@ export const COMMUNITY_ROUTE_PLUGINS: AdminRoutePlugin[] = [
   registerCardsRoutes,
   registerWelcomeRoutes,
   registerRoleMenuRoutes,
+  registerScheduledMessageRoutes,
   registerPlaceholderRoutes,
 ];
 
