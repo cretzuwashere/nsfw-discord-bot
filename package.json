@@ -24,7 +24,7 @@
     "db:generate": "pnpm --filter @botplatform/database run generate",
     "db:migrate": "pnpm --filter @botplatform/database run migrate",
     "db:seed": "pnpm --filter @botplatform/database run seed",
-    "setup": "pnpm db:migrate && pnpm db:seed",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
     "discord:register-commands": "pnpm --filter @botplatform/bot run register-commands"
   },
   "devDependencies": {

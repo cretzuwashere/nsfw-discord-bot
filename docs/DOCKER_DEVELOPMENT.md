@@ -47,7 +47,8 @@ docker compose exec app pnpm discord:register-commands
 docker compose exec app pnpm format                     # prettier --write
 ```
 
-`pnpm setup` = `db:migrate` + `db:seed` in one go.
+`pnpm db:setup` = `db:migrate` + `db:seed` in one go. (It's `db:setup`, not
+`setup` — `pnpm setup` is a reserved built-in command and would not run this.)
 
 ## Database access
 

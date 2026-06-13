@@ -148,7 +148,7 @@ docker compose down -v          # containers + volumes (DB data!)
 docker compose build --no-cache
 docker compose up -d
 docker compose exec app pnpm install
-docker compose exec app pnpm setup
+docker compose exec app pnpm db:setup
 ```
 
 **Playwright browser issues inside the container**
