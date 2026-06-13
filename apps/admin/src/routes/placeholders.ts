@@ -6,7 +6,6 @@ import type { AdminRouteContext, AdminRoutePlugin } from './context.js';
  * remove its path from PLACEHOLDER_PAGES (the real route then owns it).
  */
 const PLACEHOLDER_PAGES: Array<{ path: string; title: string; description: string }> = [
-  { path: '/role-menus', title: 'Reaction Roles', description: 'Build button, select-menu and reaction role menus.' },
   { path: '/birthdays', title: 'Birthdays', description: 'Opt-in birthday announcements, roles and cards.' },
   { path: '/reminders', title: 'Reminders', description: 'Personal and server reminders, recurring and timezone-aware.' },
   { path: '/scheduled-messages', title: 'Scheduled Messages', description: 'Schedule one-off and recurring messages to channels.' },

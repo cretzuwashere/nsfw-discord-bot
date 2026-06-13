@@ -7,6 +7,7 @@ import { createDatabase, createDbAuditLog } from '@botplatform/database';
 import { registerSlashCommands } from '@botplatform/discord-adapter';
 import { createLogger } from '@botplatform/logger';
 import { createModerationModule } from '@botplatform/moderation-module';
+import { createRoleMenusModule } from '@botplatform/role-menus-module';
 
 /** Registration only needs command shapes — modules never act here. */
 const NOOP_GUILD_PROVIDER: GuildServiceProvider = {
@@ -43,10 +44,18 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: NOOP_GUILD_PROVIDER,
   });
+  const roleMenus = createRoleMenusModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
   const commands = [
     ...audio.module.commands,
     ...moderation.module.commands,
     ...announcements.module.commands,
+    ...roleMenus.module.commands,
   ];
 
   const count = await registerSlashCommands({

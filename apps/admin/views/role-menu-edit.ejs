@@ -1,0 +1,60 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const m = menu || {}; const isNew = !m.id;
+   const c = m.constraints || {};
+   const optionLines = (options || []).map(o => [o.roleId, o.label, o.description, o.emoji].filter(Boolean).join(' | ')).join('\n'); %>
+<h1><%= isNew ? 'New Role Menu' : 'Edit Role Menu' %></h1>
+<% for (const error of (errors || [])) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+
+<section class="card">
+  <form method="post" action="/role-menus/<%= m.id || 'new' %>/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId">
+      <% for (const g of guilds) { %>
+        <option value="<%= g.id %>" <%= m.guildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option>
+      <% } %>
+    </select>
+
+    <label for="name">Menu name</label>
+    <input id="name" name="name" type="text" value="<%= m.name || '' %>" required>
+
+    <label for="type">Interaction type</label>
+    <select id="type" name="type">
+      <% for (const ty of ['button','select','reaction']) { %>
+        <option value="<%= ty %>" <%= m.type === ty ? 'selected' : '' %>><%= ty %><%= ty === 'reaction' ? ' (published as buttons)' : '' %></option>
+      <% } %>
+    </select>
+
+    <label for="mode">Assignment mode</label>
+    <select id="mode" name="mode">
+      <% for (const md of ['multiple','single','toggle','add_only','remove_only','unique']) { %>
+        <option value="<%= md %>" <%= m.mode === md ? 'selected' : '' %>><%= md %></option>
+      <% } %>
+    </select>
+
+    <label for="title">Embed title</label>
+    <input id="title" name="title" type="text" value="<%= m.title || 'Select your roles' %>">
+    <label for="description">Embed description</label>
+    <textarea id="description" name="description" rows="2"><%= m.description || '' %></textarea>
+
+    <label for="options">Role options (one per line: <code>roleId | label | description | emoji</code>)</label>
+    <textarea id="options" name="options" rows="6" style="font-family:monospace" placeholder="123456789 | Red | The red role | 🔴"><%= optionLines %></textarea>
+
+    <label for="maxSelections">Max selections (optional)</label>
+    <input id="maxSelections" name="maxSelections" type="number" min="1" value="<%= c.maxSelections || '' %>">
+    <label for="requiredRoleId">Required role ID before selecting (optional)</label>
+    <input id="requiredRoleId" name="requiredRoleId" type="text" value="<%= c.requiredRoleId || '' %>">
+    <label for="blockedRoleId">Blocked role ID (optional)</label>
+    <input id="blockedRoleId" name="blockedRoleId" type="text" value="<%= c.blockedRoleId || '' %>">
+
+    <button type="submit" class="btn btn-primary">Save menu</button>
+    <a class="btn btn-ghost" href="/role-menus">Back</a>
+  </form>
+  <% if (!isNew) { %>
+    <p class="muted small">Publish in Discord: <code>/roles menu <%= m.id %></code> in the target channel
+    (the bot needs <strong>Manage Roles</strong> and its role above the assignable roles).</p>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

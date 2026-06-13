@@ -1,0 +1,37 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Reaction Roles</h1>
+<% if (message) { %><div class="alert alert-ok" role="status"><%= message.replace(/\+/g, ' ') %></div><% } %>
+
+<section class="card">
+  <p><a class="btn btn-primary" href="/role-menus/new">New role menu</a></p>
+  <% if (guilds.length === 0) { %>
+    <p class="muted">No servers yet — the bot records servers when it connects.</p>
+  <% } else if (menus.length === 0) { %>
+    <p class="muted">No role menus yet. Create one, then publish it in Discord with
+    <code>/roles menu &lt;id&gt;</code>.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Name</th><th>ID</th><th>Type</th><th>Mode</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% for (const m of menus) { %>
+          <tr>
+            <td><a href="/role-menus/<%= m.id %>"><%= m.name %></a></td>
+            <td><code><%= m.id.slice(0, 8) %></code></td>
+            <td><%= m.type %></td>
+            <td><%= m.mode %></td>
+            <td><span class="badge badge-<%= m.enabled ? 'ok' : 'muted' %>"><%= m.enabled ? 'Enabled' : 'Disabled' %></span></td>
+            <td>
+              <form method="post" action="/role-menus/<%= m.id %>/toggle" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn <%= m.enabled ? 'btn-warn' : 'btn-primary' %>"><%= m.enabled ? 'Disable' : 'Enable' %></button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <p class="muted small">Publish or refresh a menu in Discord: <code>/roles menu &lt;id&gt;</code> in the target channel.</p>
+  <% } %>
+</section>
+<%- include('partials/footer') %>
