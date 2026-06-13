@@ -1,3 +1,4 @@
+import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
 import { loadConfig } from '@botplatform/config';
 import { BotKernel, CachedModuleState } from '@botplatform/core';
@@ -28,6 +29,8 @@ async function main(): Promise<void> {
   const moduleState = new CachedModuleState(createDbModuleState(database.db), logger);
   const guildsRepo = createGuildsRepo(database.db);
 
+  const adapter = new DiscordAdapter();
+
   const audioHandle = createAudioModule({
     config,
     logger,
@@ -39,8 +42,15 @@ async function main(): Promise<void> {
     db: database.db,
     audit,
   });
-
-  const adapter = new DiscordAdapter();
+  // The adapter implements GuildServiceProvider — community modules send
+  // messages and manage roles through it.
+  const announcementsHandle = createAnnouncementsModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+  });
   adapter.onGuildSeen = (externalId, name) => {
     void guildsRepo
       .upsertByExternalId({ adapterKey: ADAPTER_KEYS.discord, externalId, name })
@@ -52,7 +62,7 @@ async function main(): Promise<void> {
   const kernel = new BotKernel({
     config,
     logger,
-    modules: [audioHandle.module, moderationHandle.module],
+    modules: [audioHandle.module, moderationHandle.module, announcementsHandle.module],
     adapters: [adapter],
     audit,
     moduleState,
@@ -61,6 +71,9 @@ async function main(): Promise<void> {
       await database.close();
     },
   });
+
+  // Scheduler jobs contributed by modules.
+  kernel.scheduler.register(announcementsHandle.schedulerJob);
 
   kernel.health.register(createDbHealthIndicator(database.db));
   kernel.health.register({

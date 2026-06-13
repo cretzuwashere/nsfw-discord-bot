@@ -44,9 +44,9 @@ export function createModerationModule(options: ModerationModuleOptions): Modera
 
   const module: BotModule = {
     key: MODULE_KEYS.moderation,
-    name: 'Moderation Foundation',
+    name: 'Moderation',
     description:
-      'Foundation for moderation: warnings, action records, rules and role permission mappings. ' +
+      'Moderation: warnings, action records, rules and role permission mappings. ' +
       'Slash commands arrive in later phases — see docs/MODERATION_ROADMAP.md.',
     commands: [],
     onLoad(ctx) {

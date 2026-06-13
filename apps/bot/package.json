@@ -11,6 +11,7 @@
     "register-commands": "tsx src/register-commands.ts"
   },
   "dependencies": {
+    "@botplatform/announcements-module": "workspace:*",
     "@botplatform/audio-module": "workspace:*",
     "@botplatform/config": "workspace:*",
     "@botplatform/core": "workspace:*",

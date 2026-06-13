@@ -167,7 +167,7 @@ describe('admin panel integration', () => {
     expect(dashboard.statusCode).toBe(200);
     expect(dashboard.body).toContain('TestBot#0001');
     expect(dashboard.body).toContain('Audio Player');
-    expect(dashboard.body).toContain('Moderation Foundation');
+    expect(dashboard.body).toContain('Announcements');
 
     const audit = createAuditLogsRepo(database.db);
     const logins = await audit.listRecent({ action: 'admin.login', limit: 5 });

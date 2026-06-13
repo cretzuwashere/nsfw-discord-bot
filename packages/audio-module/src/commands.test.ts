@@ -42,6 +42,7 @@ function makeCtx(
   const replies: Array<{ content: string; ephemeral: boolean }> = [];
   const ctx: CommandContext & { replies: typeof replies; deferred: () => boolean } = {
     commandName,
+    subcommand: null,
     adapterKey: 'test',
     guildId: 'guild-1',
     channelId: 'text-1',
@@ -67,11 +68,15 @@ function makeCtx(
   return ctx;
 }
 
-async function run(harness: Harness, name: string, options: Record<string, string> = {}) {
+function execOf(harness: Harness, name: string): NonNullable<CommandDefinition['execute']> {
   const command = harness.commands.get(name);
-  if (!command) throw new Error(`command ${name} not registered`);
+  if (!command?.execute) throw new Error(`command ${name} not registered or has no execute`);
+  return command.execute;
+}
+
+async function run(harness: Harness, name: string, options: Record<string, string> = {}) {
   const ctx = makeCtx(harness, name, options);
-  await command.execute(ctx);
+  await execOf(harness, name)(ctx);
   return ctx;
 }
 
@@ -94,9 +99,8 @@ describe('command registration', () => {
 
 describe('/join', () => {
   it('throws VOICE_UNAVAILABLE when the adapter has no voice support', async () => {
-    const command = harness.commands.get('join')!;
     const ctx = makeCtx(harness, 'join', {}, { voice: null });
-    const error = await command.execute(ctx).catch((e) => e);
+    const error = await execOf(harness, 'join')(ctx).catch((e) => e);
     expect(error).toBeInstanceOf(UserFacingError);
     expect((error as UserFacingError).code).toBe('VOICE_UNAVAILABLE');
   });
@@ -162,9 +166,8 @@ describe('/play', () => {
     harness.resolve.mockRejectedValue(
       new UserFacingError('URL_INVALID', 'That is not a valid link.')
     );
-    const command = harness.commands.get('play')!;
     const ctx = makeCtx(harness, 'play', { url: 'not-a-url' });
-    const error = await command.execute(ctx).catch((e) => e);
+    const error = await execOf(harness, 'play')(ctx).catch((e) => e);
     expect(error).toBeInstanceOf(UserFacingError);
     expect((error as UserFacingError).safeMessage).toBe('That is not a valid link.');
   });
@@ -179,9 +182,8 @@ describe('/play', () => {
     await run(harness, 'play', { url: 'https://example.com/three.mp3' });
     await run(harness, 'play', { url: 'https://example.com/four.mp3' });
 
-    const overflow = harness.commands.get('play')!;
     const ctx = makeCtx(harness, 'play', { url: 'https://example.com/five.mp3' });
-    const error = await overflow.execute(ctx).catch((e) => e);
+    const error = await execOf(harness, 'play')(ctx).catch((e) => e);
     expect(error).toBeInstanceOf(UserFacingError);
     expect((error as UserFacingError).code).toBe('QUEUE_FULL');
   });

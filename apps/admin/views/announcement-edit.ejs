@@ -1,0 +1,89 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<% const a = announcement || {}; const isNew = !a.id; %>
+<h1><%= isNew ? 'New Announcement' : 'Edit Announcement' %></h1>
+
+<% for (const error of (errors || [])) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+<% for (const warning of (warnings || [])) { %><div class="alert alert-ok" role="status"><%= warning %></div><% } %>
+
+<section class="card">
+  <form method="post" action="/announcements/<%= a.id || 'new' %>/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId">
+      <% for (const g of guilds) { %>
+        <option value="<%= g.id %>" <%= a.guildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option>
+      <% } %>
+    </select>
+
+    <label for="title">Title</label>
+    <input id="title" name="title" type="text" value="<%= a.title || '' %>" maxlength="256">
+
+    <label for="body">Body</label>
+    <textarea id="body" name="body" rows="6" maxlength="4000"><%= a.body || '' %></textarea>
+
+    <label for="format">Format</label>
+    <select id="format" name="format">
+      <option value="plain" <%= a.format === 'plain' ? 'selected' : '' %>>Plain message</option>
+      <option value="embed" <%= a.format === 'embed' ? 'selected' : '' %>>Embed / card</option>
+    </select>
+
+    <label for="targetChannelId">Target channel ID</label>
+    <input id="targetChannelId" name="targetChannelId" type="text" value="<%= a.targetChannelId || '' %>"
+      placeholder="Discord channel ID (right-click channel → Copy Channel ID)">
+
+    <label for="embedColor">Embed color (hex, optional)</label>
+    <input id="embedColor" name="embedColor" type="text" value="<%= a.embedColor || '' %>" placeholder="#5865F2">
+
+    <label for="footer">Footer (optional)</label>
+    <input id="footer" name="footer" type="text" value="<%= a.footer || '' %>">
+
+    <label for="imageUrl">Image URL (optional)</label>
+    <input id="imageUrl" name="imageUrl" type="text" value="<%= a.imageUrl || '' %>" placeholder="https://...">
+
+    <label for="mentionMode">Mentions</label>
+    <select id="mentionMode" name="mentionMode">
+      <option value="none" <%= (a.mentionMode || 'none') === 'none' ? 'selected' : '' %>>No mentions</option>
+      <option value="here" <%= a.mentionMode === 'here' ? 'selected' : '' %>>@here</option>
+      <option value="everyone" <%= a.mentionMode === 'everyone' ? 'selected' : '' %>>@everyone</option>
+      <option value="roles" <%= a.mentionMode === 'roles' ? 'selected' : '' %>>Specific roles</option>
+    </select>
+
+    <label for="mentionRoleIds">Role IDs to mention (comma-separated, for "Specific roles")</label>
+    <input id="mentionRoleIds" name="mentionRoleIds" type="text"
+      value="<%= Array.isArray(a.mentionRoleIds) ? a.mentionRoleIds.join(', ') : (a.mentionRoleIds || '') %>">
+
+    <label class="checkbox-label">
+      <input type="checkbox" name="confirmMassMention"> I understand @everyone/@here pings many members
+    </label>
+
+    <label class="checkbox-label">
+      <input type="checkbox" name="isTemplate" <%= a.isTemplate ? 'checked' : '' %>> Save as a reusable template (not delivered)
+    </label>
+
+    <button type="submit" class="btn btn-primary">Save draft</button>
+    <a class="btn btn-ghost" href="/announcements">Back</a>
+  </form>
+</section>
+
+<% if (!isNew && !a.isTemplate && a.status !== 'sent') { %>
+  <section class="card">
+    <h2>Send or schedule</h2>
+    <form method="post" action="/announcements/<%= a.id %>/schedule">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label for="scheduledFor">Schedule for (leave blank to send now)</label>
+      <input id="scheduledFor" name="scheduledFor" type="datetime-local">
+      <button type="submit" class="btn btn-primary">Schedule / Send now</button>
+    </form>
+    <form method="post" action="/announcements/<%= a.id %>/cancel" class="inline-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn btn-warn">Cancel</button>
+    </form>
+    <form method="post" action="/announcements/<%= a.id %>/delete" class="inline-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn btn-warn">Delete</button>
+    </form>
+  </section>
+<% } %>
+<%- include('partials/footer') %>

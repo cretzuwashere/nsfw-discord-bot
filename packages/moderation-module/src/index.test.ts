@@ -13,7 +13,7 @@ describe('createModerationModule', () => {
     });
 
     expect(handle.module.key).toBe(MODULE_KEYS.moderation);
-    expect(handle.module.name).toBe('Moderation Foundation');
+    expect(handle.module.name).toBe('Moderation');
     expect(handle.module.commands).toHaveLength(0);
   });
 

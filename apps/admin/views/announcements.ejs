@@ -1,0 +1,45 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Announcements</h1>
+<% if (message) { %><div class="alert alert-ok" role="status"><%= message.replace(/\+/g, ' ') %></div><% } %>
+
+<section class="card">
+  <p>
+    <a class="btn btn-primary" href="/announcements/new">New announcement</a>
+  </p>
+  <% if (guilds.length === 0) { %>
+    <p class="muted">No servers yet — the bot records servers when it connects to Discord.</p>
+  <% } else if (announcements.length === 0) { %>
+    <p class="muted">No announcements yet. Create your first one above.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Title</th><th>Status</th><th>Type</th><th>Scheduled</th><th>Created</th><th></th></tr></thead>
+      <tbody>
+        <% for (const a of announcements) { %>
+          <tr>
+            <td><a href="/announcements/<%= a.id %>"><%= a.title || a.body || '(empty)' %></a></td>
+            <td><span class="badge badge-<%= a.status === 'sent' ? 'ok' : a.status === 'failed' ? 'error' : 'muted' %>"><%= a.status %></span></td>
+            <td><%= a.isTemplate ? 'template' : 'announcement' %></td>
+            <td class="nowrap muted small"><%= a.scheduledFor ? a.scheduledFor.toISOString().slice(0, 16).replace('T', ' ') : '—' %></td>
+            <td class="nowrap muted small"><%= a.createdAt.toISOString().slice(0, 10) %></td>
+            <td class="nowrap">
+              <% if (!a.isTemplate && a.status !== 'sent') { %>
+                <form method="post" action="/announcements/<%= a.id %>/schedule" class="inline-form">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <input type="hidden" name="sendNow" value="on">
+                  <button type="submit" class="btn btn-primary">Send now</button>
+                </form>
+              <% } %>
+              <form method="post" action="/announcements/<%= a.id %>/duplicate" class="inline-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-ghost">Duplicate</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  <% } %>
+  <p class="muted small">Scheduled and "send now" announcements are delivered by the bot worker within ~30&nbsp;seconds.</p>
+</section>
+<%- include('partials/footer') %>

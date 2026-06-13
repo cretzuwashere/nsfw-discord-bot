@@ -21,6 +21,8 @@ export interface CommandUser {
  */
 export interface CommandContext {
   readonly commandName: string;
+  /** Invoked subcommand name, or null for a flat command. */
+  readonly subcommand: string | null;
   readonly adapterKey: string;
   readonly guildId: string | null;
   readonly channelId: string | null;
@@ -35,14 +37,24 @@ export interface CommandContext {
   reply(payload: ReplyPayload): Promise<void>;
 }
 
+/** A subcommand of a parent command (e.g. `/announcement send`). */
+export interface SubcommandDefinition {
+  name: string;
+  description: string;
+  options?: CommandOptionDef[];
+  execute(ctx: CommandContext): Promise<void>;
+}
+
 /** A command contributed by a module, in adapter-neutral form. */
 export interface CommandDefinition {
   name: string;
   description: string;
   options?: CommandOptionDef[];
+  /** When present, the command groups subcommands and `execute` is optional. */
+  subcommands?: SubcommandDefinition[];
   /** True when the command only makes sense inside a guild/server. */
   guildOnly?: boolean;
-  execute(ctx: CommandContext): Promise<void>;
+  execute?(ctx: CommandContext): Promise<void>;
 }
 
 export type CommandDispatcher = (ctx: CommandContext) => Promise<void>;

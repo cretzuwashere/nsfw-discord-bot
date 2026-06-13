@@ -22,6 +22,7 @@ function makeCtx(commandName = 'ping'): CommandContext & { replies: string[] } {
   const replies: string[] = [];
   return {
     commandName,
+    subcommand: null,
     adapterKey: 'test',
     guildId: 'guild-1',
     channelId: 'chan-1',

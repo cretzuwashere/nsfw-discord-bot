@@ -21,18 +21,77 @@ export async function seed(db: Db, options: SeedOptions = {}): Promise<void> {
   const modulesRepo = createModulesRepo(db);
   const adminRepo = createAdminUsersRepo(db);
 
-  await modulesRepo.ensure({
-    key: MODULE_KEYS.audioPlayer,
-    name: 'Audio Player',
-    description: 'Voice channel audio playback with queue management.',
-    defaultEnabled: true,
-  });
-  await modulesRepo.ensure({
-    key: MODULE_KEYS.moderation,
-    name: 'Moderation Foundation',
-    description: 'Warnings, moderation actions and configurable rules (foundation).',
-    defaultEnabled: false,
-  });
+  const builtInModules: Array<{ key: string; name: string; description: string; defaultEnabled: boolean }> = [
+    {
+      key: MODULE_KEYS.audioPlayer,
+      name: 'Audio Player',
+      description: 'Voice channel audio playback (YouTube, SoundCloud, Spotify, direct links) with a queue.',
+      defaultEnabled: true,
+    },
+    {
+      key: MODULE_KEYS.announcements,
+      name: 'Announcements',
+      description: 'Create, schedule and send server announcements from the admin panel.',
+      defaultEnabled: true,
+    },
+    {
+      key: MODULE_KEYS.welcome,
+      name: 'Welcome / Leave',
+      description: 'Welcome and leave messages, cards, auto-roles and DMs.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.dynamicCards,
+      name: 'Dynamic Cards',
+      description: 'Generate personalized images (welcome cards, birthday cards, banners).',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.roleMenus,
+      name: 'Reaction Roles',
+      description: 'Self-assignable roles via buttons, select menus and reactions.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.birthdays,
+      name: 'Birthdays',
+      description: 'Opt-in birthday announcements, roles and cards.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.reminders,
+      name: 'Reminders',
+      description: 'Personal and server reminders, recurring and timezone-aware.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.scheduledMessages,
+      name: 'Scheduled Messages',
+      description: 'Schedule one-off and recurring messages to channels.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.moderation,
+      name: 'Moderation',
+      description: 'Warnings, mutes/timeouts, kick/ban, purge and moderation cases.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.automod,
+      name: 'Auto-Moderation',
+      description: 'Banned words, spam, mention and link filtering with escalation.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.customCommands,
+      name: 'Custom Commands',
+      description: 'Create text, embed and random-response commands.',
+      defaultEnabled: false,
+    },
+  ];
+  for (const module of builtInModules) {
+    await modulesRepo.ensure(module);
+  }
   log('modules ensured');
 
   await ensureAdmin(adminRepo, options.adminEmail, options.adminPassword, 'owner', log);

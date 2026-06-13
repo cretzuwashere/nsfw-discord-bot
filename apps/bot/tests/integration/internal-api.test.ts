@@ -27,7 +27,7 @@ function makeDeps(): InternalApiDeps & { auditEntries: AuditEntry[] } {
     modules: {
       list: () => [
         { key: 'audio-player', name: 'Audio Player' },
-        { key: 'moderation', name: 'Moderation Foundation' },
+        { key: 'moderation', name: 'Moderation' },
       ],
     },
     moduleState: { isEnabled: async (key) => key === 'audio-player' },
@@ -95,7 +95,7 @@ describe('bot internal API', () => {
       adapters: [{ key: 'discord', state: 'disabled' }],
       modules: [
         { key: 'audio-player', name: 'Audio Player', enabled: true },
-        { key: 'moderation', name: 'Moderation Foundation', enabled: false },
+        { key: 'moderation', name: 'Moderation', enabled: false },
       ],
     });
     expect(body.audio.sessions).toHaveLength(1);

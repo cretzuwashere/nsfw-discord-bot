@@ -89,9 +89,12 @@ FROM node:24-bookworm-slim AS runtime-base
 
 # ffmpeg — audio transcoding; curl — container HEALTHCHECKs + yt-dlp fetch;
 # ca-certificates — outbound HTTPS (Discord gateway, audio URLs);
-# python3 — yt-dlp's runtime interpreter for the standalone binary's needs.
+# python3 — yt-dlp's runtime interpreter for the standalone binary's needs;
+# fonts-dejavu-core + fontconfig — text rendering for the dynamic cards module
+# (@resvg/resvg-js loadSystemFonts).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates python3 \
+  && apt-get install -y --no-install-recommends \
+    ffmpeg curl ca-certificates python3 fonts-dejavu-core fontconfig \
   && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp — YouTube/SoundCloud/Spotify playback. Standalone binary, pinned;

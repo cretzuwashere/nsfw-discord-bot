@@ -56,29 +56,31 @@ async function expectToggleState(
   return toggle;
 }
 
+// A uniquely-named module so the row filter (substring match) is unambiguous.
+const TOGGLE_MODULE = 'Custom Commands';
+
 test.describe('modules administration', () => {
-  test('lists Audio Player and Moderation Foundation with their state', async ({ page }) => {
+  test('lists the built-in modules with their state', async ({ page }) => {
     await gotoOk(page, '/modules');
     await expect(page.getByText('Audio Player').first()).toBeVisible();
-    await expect(page.getByText('Moderation Foundation').first()).toBeVisible();
+    await expect(page.getByText('Announcements').first()).toBeVisible();
+    await expect(page.getByText(TOGGLE_MODULE).first()).toBeVisible();
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toMatch(/enabled|disabled|\bon\b|\boff\b/i);
   });
 
-  test('toggles Moderation Foundation and restores it, writing audit entries', async ({
-    page,
-  }) => {
+  test(`toggles ${TOGGLE_MODULE} and restores it, writing audit entries`, async ({ page }) => {
     await gotoOk(page, '/modules');
 
-    const initial = await resolveToggle(moduleRow(page, 'Moderation Foundation'));
-    if (!initial) throw new Error('no enable/disable control found for Moderation Foundation');
+    const initial = await resolveToggle(moduleRow(page, TOGGLE_MODULE));
+    if (!initial) throw new Error(`no enable/disable control found for ${TOGGLE_MODULE}`);
 
     await initial.control.click();
-    const flipped = await expectToggleState(page, 'Moderation Foundation', !initial.enabled);
+    const flipped = await expectToggleState(page, TOGGLE_MODULE, !initial.enabled);
 
     // Restore the original state so the suite stays idempotent.
     await flipped.control.click();
-    await expectToggleState(page, 'Moderation Foundation', initial.enabled);
+    await expectToggleState(page, TOGGLE_MODULE, initial.enabled);
 
     await gotoOk(page, '/audit-logs');
     await expect(page.getByText(/module\.[\w.-]+/i).first()).toBeVisible();

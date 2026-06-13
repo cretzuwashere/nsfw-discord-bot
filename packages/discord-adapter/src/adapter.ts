@@ -316,8 +316,14 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
     const ctx = this.ctx;
     if (!ctx) throw new Error('adapter not started');
 
+    const subcommand = interaction.options.getSubcommand(false);
+    // For subcommand invocations, the real options live under the subcommand
+    // node; otherwise they're at the top level.
+    const optionData = subcommand
+      ? (interaction.options.data[0]?.options ?? [])
+      : interaction.options.data;
     const options: Record<string, string | number | boolean | undefined> = {};
-    for (const option of interaction.options.data) {
+    for (const option of optionData) {
       if (
         typeof option.value === 'string' ||
         typeof option.value === 'number' ||
@@ -334,6 +340,7 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
 
     return {
       commandName: interaction.commandName,
+      subcommand,
       adapterKey: this.key,
       guildId: interaction.guildId,
       channelId: interaction.channelId,

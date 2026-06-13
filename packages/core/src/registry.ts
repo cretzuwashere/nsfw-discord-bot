@@ -122,7 +122,7 @@ export class ModuleRegistry {
           return;
         }
 
-        await entry.command.execute(ctx);
+        await runCommand(entry.command, ctx);
 
         await audit.record({
           actorType: 'platform_user',
@@ -151,6 +151,24 @@ export class ModuleRegistry {
       }
     };
   }
+}
+
+/** Route to a subcommand's execute when present, else the flat execute. */
+async function runCommand(command: CommandDefinition, ctx: CommandContext): Promise<void> {
+  if (command.subcommands && command.subcommands.length > 0) {
+    const sub = command.subcommands.find((candidate) => candidate.name === ctx.subcommand);
+    if (!sub) {
+      await ctx.reply({ content: 'Unknown subcommand.', ephemeral: true });
+      return;
+    }
+    await sub.execute(ctx);
+    return;
+  }
+  if (!command.execute) {
+    await ctx.reply({ content: 'This command is not available.', ephemeral: true });
+    return;
+  }
+  await command.execute(ctx);
 }
 
 async function safeReply(ctx: CommandContext, message: string, logger: Logger): Promise<void> {

@@ -1,9 +1,18 @@
 /* eslint-disable no-console */
+import { createAnnouncementsModule } from '@botplatform/announcements-module';
 import { createAudioModule } from '@botplatform/audio-module';
 import { loadConfig } from '@botplatform/config';
+import type { GuildService, GuildServiceProvider } from '@botplatform/core';
+import { createDatabase, createDbAuditLog } from '@botplatform/database';
 import { registerSlashCommands } from '@botplatform/discord-adapter';
 import { createLogger } from '@botplatform/logger';
 import { createModerationModule } from '@botplatform/moderation-module';
+
+/** Registration only needs command shapes — modules never act here. */
+const NOOP_GUILD_PROVIDER: GuildServiceProvider = {
+  isReady: () => false,
+  forGuild: () => null as GuildService | null,
+};
 
 /**
  * CLI: register all module slash commands with Discord.
@@ -20,12 +29,25 @@ async function main(): Promise<void> {
   }
 
   const logger = createLogger({ name: 'register-commands', level: config.logLevel, pretty: true });
+  const database = createDatabase(config.database.url);
+  const audit = createDbAuditLog(database.db, logger);
 
-  // Modules are constructed without persistence — we only need their
-  // command definitions for registration.
+  // Modules are built only to collect their command definitions; nothing is
+  // executed, so the no-op guild provider is fine.
   const audio = createAudioModule({ config, logger, playback: null });
   const moderation = createModerationModule({ config, logger, db: null });
-  const commands = [...audio.module.commands, ...moderation.module.commands];
+  const announcements = createAnnouncementsModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
+  const commands = [
+    ...audio.module.commands,
+    ...moderation.module.commands,
+    ...announcements.module.commands,
+  ];
 
   const count = await registerSlashCommands({
     token: config.discord.token,
@@ -34,6 +56,7 @@ async function main(): Promise<void> {
     commands,
     logger,
   });
+  await database.close();
 
   const scope = config.discord.guildId
     ? `guild ${config.discord.guildId} (instant)`

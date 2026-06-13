@@ -28,6 +28,7 @@ import fastify, {
 } from 'fastify';
 import { createBotClient, type AudioAdminAction, type BotStatusClient } from './bot-client.js';
 import { publicDir, viewsDir } from './paths.js';
+import { COMMUNITY_ROUTE_PLUGINS, type AdminRouteContext } from './routes/index.js';
 import { validateGuildSettingsInput } from './validation.js';
 
 declare module '@fastify/secure-session' {
@@ -474,6 +475,22 @@ export async function buildAdminServer(deps: AdminDeps): Promise<FastifyInstance
       readiness,
     });
   });
+
+  // --- Community module routes (each owns its own file) ----------------------
+  const routeContext: AdminRouteContext = {
+    config,
+    db,
+    logger,
+    audit,
+    botClient,
+    requireAuth,
+    requireMutatingRole,
+    csrfProtection: app.csrfProtection,
+    pageLocals: (request, reply, title) => pageLocals(request, reply, title),
+  };
+  for (const registerRoutes of COMMUNITY_ROUTE_PLUGINS) {
+    registerRoutes(app, routeContext);
+  }
 
   return app;
 }

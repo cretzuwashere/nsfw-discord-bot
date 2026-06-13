@@ -5,10 +5,20 @@
       ['/dashboard', 'Dashboard'],
       ['/modules', 'Modules'],
       ['/audio', 'Audio Player'],
-      ['/guilds', 'Guild Settings'],
+      ['/announcements', 'Announcements'],
+      ['/cards', 'Dynamic Cards'],
+      ['/welcome', 'Welcome / Leave'],
+      ['/role-menus', 'Reaction Roles'],
+      ['/birthdays', 'Birthdays'],
+      ['/reminders', 'Reminders'],
+      ['/scheduled-messages', 'Scheduled Messages'],
       ['/moderation', 'Moderation'],
+      ['/automod', 'Auto-Moderation'],
+      ['/custom-commands', 'Custom Commands'],
+      ['/guilds', 'Guild Settings'],
       ['/audit-logs', 'Audit Logs'],
-      ['/settings', 'System Settings'],
+      ['/permissions', 'Permissions'],
+      ['/settings', 'System Health'],
     ]; %>
     <% for (const [href, label] of links) { %>
       <a href="<%= href %>" class="<%= currentPath === href ? 'active' : '' %>"><%= label %></a>

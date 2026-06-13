@@ -5,20 +5,24 @@ import type { CommandDefinition, CommandOptionDef } from '@botplatform/core';
  * https://discord.com/developers/docs/interactions/application-commands
  */
 export const DISCORD_OPTION_TYPES = {
+  subcommand: 1,
   string: 3,
   integer: 4,
   boolean: 5,
 } as const;
 
+interface DiscordOptionJson {
+  type: number;
+  name: string;
+  description: string;
+  required?: boolean;
+  options?: DiscordOptionJson[];
+}
+
 export interface DiscordCommandJson {
   name: string;
   description: string;
-  options?: Array<{
-    type: number;
-    name: string;
-    description: string;
-    required: boolean;
-  }>;
+  options?: DiscordOptionJson[];
   /** 0 = guild-only (no DMs); omitted = everywhere. */
   contexts?: number[];
 }
@@ -30,7 +34,14 @@ export function commandsToDiscordJson(commands: CommandDefinition[]): DiscordCom
       name: command.name,
       description: truncateDescription(command.description),
     };
-    if (command.options && command.options.length > 0) {
+    if (command.subcommands && command.subcommands.length > 0) {
+      json.options = command.subcommands.map((sub) => ({
+        type: DISCORD_OPTION_TYPES.subcommand,
+        name: sub.name,
+        description: truncateDescription(sub.description),
+        options: (sub.options ?? []).map(optionToJson),
+      }));
+    } else if (command.options && command.options.length > 0) {
       json.options = command.options.map(optionToJson);
     }
     if (command.guildOnly) {

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@botplatform/announcements-module": "workspace:*",
     "@botplatform/config": "workspace:*",
     "@botplatform/core": "workspace:*",
     "@botplatform/database": "workspace:*",
