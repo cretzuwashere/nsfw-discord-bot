@@ -11,6 +11,15 @@ export const MODULE_KEYS = {
   scheduledMessages: 'scheduled-messages',
   automod: 'automod',
   customCommands: 'custom-commands',
+  raiseHand: 'raise-hand',
+  funCommands: 'fun-commands',
+  engagementPrompts: 'engagement-prompts',
+  giveaways: 'giveaways',
+  serverStats: 'server-stats',
+  trivia: 'trivia',
+  minigames: 'minigames',
+  economy: 'economy',
+  levels: 'levels',
 } as const;
 export type ModuleKey = (typeof MODULE_KEYS)[keyof typeof MODULE_KEYS];
 

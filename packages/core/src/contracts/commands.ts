@@ -5,8 +5,8 @@ import type { VoiceCapability } from './voice.js';
 export interface CommandOptionDef {
   name: string;
   description: string;
-  /** 'user'/'channel' deliver the selected entity's id as a string option. */
-  type: 'string' | 'integer' | 'boolean' | 'user' | 'channel';
+  /** 'user'/'channel'/'role' deliver the selected entity's id as a string option. */
+  type: 'string' | 'integer' | 'boolean' | 'user' | 'channel' | 'role';
   required?: boolean;
 }
 

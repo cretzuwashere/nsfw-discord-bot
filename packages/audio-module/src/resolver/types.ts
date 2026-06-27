@@ -16,6 +16,26 @@ export interface ResolveContext {
 export interface ResolvedTrack {
   metadata: TrackSummary;
   source: AudioStreamSource;
+  /**
+   * Continuous/live source (online radio, livestream). Live tracks have no
+   * meaningful duration and are exempt from the per-track duration watchdog
+   * in the playback session.
+   */
+  isLive?: boolean;
+}
+
+/**
+ * Result of expanding a playlist URL into queueable tracks. `total` is the raw
+ * number of entries the playlist reported; `skipped` counts entries dropped as
+ * unavailable/private/deleted/too-long. Entries that are playable but beyond
+ * the requested cap are neither in `tracks` nor in `skipped` — the caller can
+ * derive that count as `total - skipped - tracks.length`.
+ */
+export interface PlaylistResolution {
+  tracks: ResolvedTrack[];
+  total: number;
+  skipped: number;
+  title?: string | undefined;
 }
 
 /**
@@ -29,4 +49,10 @@ export interface AudioProvider {
   canResolve(url: URL): boolean;
   /** Produce metadata + a lazy stream source. Must not open sockets eagerly. */
   resolve(rawUrl: string, ctx: ResolveContext): Promise<ResolvedTrack>;
+  /**
+   * Optional: expand a playlist URL into many tracks (lazy per-item streams).
+   * Only providers that understand playlists implement this; the resolver
+   * routes playlist requests to the first claiming provider that has it.
+   */
+  resolvePlaylist?(rawUrl: string, ctx: ResolveContext, limit: number): Promise<PlaylistResolution>;
 }

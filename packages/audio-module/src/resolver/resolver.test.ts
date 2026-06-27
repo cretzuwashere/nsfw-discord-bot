@@ -98,6 +98,39 @@ describe('AudioResolver', () => {
   });
 });
 
+describe('AudioResolver.resolvePlaylist', () => {
+  it('routes to the first claiming provider that supports playlists', async () => {
+    mockedValidate.mockResolvedValue(validationOk('https://youtube.com/playlist?list=PL'));
+    const playlistResult = { tracks: [], total: 0, skipped: 0 };
+    const noPlaylist: AudioProvider = { key: 'np', canResolve: () => true, resolve: vi.fn() };
+    const withPlaylist: AudioProvider = {
+      key: 'yt',
+      canResolve: () => true,
+      resolve: vi.fn(),
+      resolvePlaylist: vi.fn(async () => playlistResult),
+    };
+    const resolver = new AudioResolver([noPlaylist, withPlaylist]);
+
+    const result = await resolver.resolvePlaylist('https://youtube.com/playlist?list=PL', ctx, 50);
+    expect(result).toBe(playlistResult);
+    expect(withPlaylist.resolvePlaylist).toHaveBeenCalledWith(
+      'https://youtube.com/playlist?list=PL',
+      ctx,
+      50
+    );
+  });
+
+  it('rejects when no provider supports playlists', async () => {
+    mockedValidate.mockResolvedValue(validationOk('https://example.com/a.mp3'));
+    const resolver = new AudioResolver([new DirectHttpAudioProvider()]);
+    const error = await resolver
+      .resolvePlaylist('https://example.com/a.mp3', ctx, 50)
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(UserFacingError);
+    expect((error as UserFacingError).code).toBe('URL_UNSUPPORTED');
+  });
+});
+
 describe('DirectHttpAudioProvider', () => {
   it('claims any http(s) URL and derives the title from the path', async () => {
     const provider = new DirectHttpAudioProvider();

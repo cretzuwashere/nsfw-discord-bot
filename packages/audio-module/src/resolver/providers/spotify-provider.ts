@@ -65,7 +65,12 @@ export class SpotifyAudioProvider implements AudioProvider {
       typeof best.duration === 'number' && Number.isFinite(best.duration)
         ? Math.round(best.duration)
         : undefined;
-    if (durationSeconds !== undefined && durationSeconds > this.options.maxTrackDurationSeconds) {
+    // A limit of 0 means "unlimited" — skip the up-front reject entirely.
+    if (
+      this.options.maxTrackDurationSeconds > 0 &&
+      durationSeconds !== undefined &&
+      durationSeconds > this.options.maxTrackDurationSeconds
+    ) {
       throw new UserFacingError(
         'TRACK_TOO_LONG',
         `That track is too long (limit ${this.options.maxTrackDurationSeconds}s).`

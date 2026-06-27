@@ -6,14 +6,27 @@ import type {
 } from '@botplatform/core';
 import { formatDuration, truncate, UserFacingError, type InternalActionResult } from '@botplatform/shared';
 import type { PlayerManager } from './engine/manager.js';
+import type { GuildPlaybackSession } from './engine/session.js';
 import { buildNowPlayingPanel, parseAudioButton } from './now-playing.js';
 import type { AudioResolver } from './resolver/resolver.js';
 import type { ResolveContext } from './resolver/types.js';
+import { classifyYouTubeUrl, type YouTubeUrlInfo } from './resolver/youtube-url.js';
 
 export interface CommandDeps {
   manager: PlayerManager;
   resolver: AudioResolver;
   resolveCtx: ResolveContext;
+  /** Max items pulled from a single YouTube playlist. */
+  maxPlaylistItems: number;
+}
+
+/** Parse a string into a URL, or null when it is not a URL at all. */
+function tryParseUrl(raw: string): URL | null {
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
 }
 
 const QUEUE_DISPLAY_LIMIT = 10;
@@ -33,7 +46,116 @@ function requireGuildId(ctx: CommandContext): string {
 }
 
 export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
-  const { manager, resolver, resolveCtx } = deps;
+  const { manager, resolver, resolveCtx, maxPlaylistItems } = deps;
+
+  /**
+   * Expand a playlist URL and batch-enqueue it, then report what happened.
+   * Shared by `/play` (auto-expands pure playlist links) and `/playlist`.
+   * Assumes `ctx.defer()` has already been called.
+   */
+  async function enqueuePlaylist(
+    ctx: CommandContext,
+    session: GuildPlaybackSession,
+    rawUrl: string
+  ): Promise<void> {
+    const result = await resolver.resolvePlaylist(rawUrl, resolveCtx, maxPlaylistItems);
+    if (result.tracks.length === 0) {
+      await ctx.reply(
+        result.total === 0
+          ? 'That playlist is empty (or its items are all unavailable).'
+          : `No playable tracks were found (${result.skipped} unavailable).`
+      );
+      return;
+    }
+
+    const requestedBy = ctx.user.displayName;
+    for (const track of result.tracks) {
+      track.metadata = { ...track.metadata, requestedBy };
+    }
+
+    const enq = await session.enqueueMany(result.tracks);
+    const capped = Math.max(0, result.total - result.skipped - result.tracks.length);
+    const parts = [`Added **${enq.accepted}** of ${result.total} track(s) from the playlist`];
+    if (result.skipped > 0) parts.push(`${result.skipped} unavailable`);
+    if (capped > 0) parts.push(`${capped} over the ${maxPlaylistItems}-track limit`);
+    if (enq.rejected > 0) parts.push(`${enq.rejected} didn't fit the queue`);
+    const summary = parts.join(' · ') + '.';
+    await ctx.reply(
+      enq.startedPlaying
+        ? `${summary}\n▶️ Now playing the first track — use \`/queue\` to see what's next.`
+        : summary
+    );
+  }
+
+  /** Play (or queue) a single track and report it. Assumes defer() was called. */
+  async function playSingle(
+    ctx: CommandContext,
+    session: GuildPlaybackSession,
+    rawUrl: string
+  ): Promise<void> {
+    // Resolution validates the URL (SSRF guards included) and throws
+    // UserFacingError for anything unsafe — the core boundary formats it.
+    const resolved = await resolver.resolve(rawUrl, resolveCtx);
+    const track = {
+      ...resolved,
+      metadata: { ...resolved.metadata, requestedBy: ctx.user.displayName },
+    };
+    const result = await session.enqueueOrPlay(track);
+    const title = truncate(track.metadata.title, 120);
+    if (result.status === 'playing') {
+      // Show the visual control panel right away when playback starts.
+      if (ctx.replyRich) {
+        await ctx.replyRich(buildNowPlayingPanel(session.getSnapshot()));
+      } else {
+        await ctx.reply(`Now playing: **${title}**`);
+      }
+    } else {
+      await ctx.reply(`Queued (#${result.position}): **${title}**`);
+    }
+  }
+
+  /**
+   * Handle a link that CONTAINS a playlist (`watch?v=…&list=…`): play the
+   * chosen video right away, then load the rest of the playlist behind it.
+   * Playlist expansion is best-effort — a hiccup there must never stop the
+   * chosen video from playing.
+   */
+  async function playVideoWithPlaylist(
+    ctx: CommandContext,
+    session: GuildPlaybackSession,
+    rawUrl: string,
+    selectedVideoId: string | undefined
+  ): Promise<void> {
+    const resolved = await resolver.resolve(rawUrl, resolveCtx);
+    const track = {
+      ...resolved,
+      metadata: { ...resolved.metadata, requestedBy: ctx.user.displayName },
+    };
+    const result = await session.enqueueOrPlay(track);
+    const title = truncate(track.metadata.title, 120);
+
+    let added = 0;
+    try {
+      const playlist = await resolver.resolvePlaylist(rawUrl, resolveCtx, maxPlaylistItems);
+      // Skip the chosen video so it is not queued twice.
+      const rest = playlist.tracks.filter(
+        (t) => !selectedVideoId || !t.metadata.url.includes(selectedVideoId)
+      );
+      for (const t of rest) {
+        t.metadata = { ...t.metadata, requestedBy: ctx.user.displayName };
+      }
+      added = (await session.enqueueMany(rest)).accepted;
+    } catch (error) {
+      ctx.logger.warn({ err: error }, 'could not expand the playlist behind the selected video');
+    }
+
+    const verb = result.status === 'playing' ? 'Now playing' : `Queued (#${result.position})`;
+    await ctx.reply(
+      added > 0
+        ? `${verb}: **${title}** — and queued **${added}** more track(s) from the playlist.`
+        : `${verb}: **${title}**`
+    );
+  }
 
   const join: CommandDefinition = {
     name: 'join',
@@ -79,6 +201,22 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
     },
   };
 
+  /** Ensure the bot is in a voice channel, joining the user's if needed. */
+  async function ensureActiveSession(ctx: CommandContext): Promise<GuildPlaybackSession | null> {
+    const voice = requireVoice(ctx);
+    const guildId = requireGuildId(ctx);
+    let active = voice.getActiveSession();
+    if (!active || active.destroyed) {
+      const channel = await voice.getUserVoiceChannel();
+      if (!channel) {
+        await ctx.reply({ content: 'You need to join a voice channel first.', ephemeral: true });
+        return null;
+      }
+      active = await voice.join(channel.id);
+    }
+    return manager.ensureSession(guildId, active);
+  }
+
   const play: CommandDefinition = {
     name: 'play',
     description: 'Play from YouTube, SoundCloud, Spotify or a direct audio link (or queue it)',
@@ -93,41 +231,53 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
     ],
     async execute(ctx) {
       await ctx.defer();
-      const voice = requireVoice(ctx);
-      const guildId = requireGuildId(ctx);
-
-      let active = voice.getActiveSession();
-      if (!active || active.destroyed) {
-        const channel = await voice.getUserVoiceChannel();
-        if (!channel) {
-          await ctx.reply({ content: 'You need to join a voice channel first.', ephemeral: true });
-          return;
-        }
-        active = await voice.join(channel.id);
-      }
+      const session = await ensureActiveSession(ctx);
+      if (!session) return;
 
       const rawUrl = String(ctx.options['url'] ?? '').trim();
-      // Resolution validates the URL (SSRF guards included) and throws
-      // UserFacingError for anything unsafe — the core boundary formats it.
-      const resolved = await resolver.resolve(rawUrl, resolveCtx);
-      const track = {
-        ...resolved,
-        metadata: { ...resolved.metadata, requestedBy: ctx.user.displayName },
-      };
+      const parsed = tryParseUrl(rawUrl);
+      const info: YouTubeUrlInfo = parsed ? classifyYouTubeUrl(parsed) : { kind: 'not-youtube' };
 
-      const session = manager.ensureSession(guildId, active);
-      const result = await session.enqueueOrPlay(track);
-      const title = truncate(track.metadata.title, 120);
-      if (result.status === 'playing') {
-        // Show the visual control panel right away when playback starts.
-        if (ctx.replyRich) {
-          await ctx.replyRich(buildNowPlayingPanel(session.getSnapshot()));
-        } else {
-          await ctx.reply(`Now playing: **${title}**`);
-        }
+      // A pure playlist link loads the whole list. A link that CONTAINS a
+      // playlist (watch?v=…&list=…) plays the chosen video, then loads the rest
+      // of the playlist behind it. Everything else is a single track.
+      if (info.kind === 'playlist') {
+        await enqueuePlaylist(ctx, session, rawUrl);
+      } else if (info.kind === 'video-in-playlist') {
+        await playVideoWithPlaylist(ctx, session, rawUrl, info.videoId);
       } else {
-        await ctx.reply(`Queued (#${result.position}): **${title}**`);
+        await playSingle(ctx, session, rawUrl);
       }
+    },
+  };
+
+  const playlist: CommandDefinition = {
+    name: 'playlist',
+    description: 'Add every track from a YouTube playlist link to the queue',
+    guildOnly: true,
+    options: [
+      {
+        name: 'url',
+        description: 'A YouTube playlist link (playlist?list=… or watch?v=…&list=…)',
+        type: 'string',
+        required: true,
+      },
+    ],
+    async execute(ctx) {
+      await ctx.defer();
+      const rawUrl = String(ctx.options['url'] ?? '').trim();
+      const parsed = tryParseUrl(rawUrl);
+      const kind = parsed ? classifyYouTubeUrl(parsed).kind : 'not-youtube';
+      if (kind === 'video' || kind === 'not-youtube') {
+        await ctx.reply({
+          content: 'That link has no playlist. Use `/play <link>` for a single track.',
+          ephemeral: true,
+        });
+        return;
+      }
+      const session = await ensureActiveSession(ctx);
+      if (!session) return;
+      await enqueuePlaylist(ctx, session, rawUrl);
     },
   };
 
@@ -271,7 +421,7 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
     },
   };
 
-  return [join, leave, play, queue, skip, pause, resume, stop, nowplaying, controls];
+  return [join, leave, play, playlist, queue, skip, pause, resume, stop, nowplaying, controls];
 }
 
 /**

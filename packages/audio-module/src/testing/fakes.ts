@@ -8,6 +8,7 @@ import type { PlaybackRepo } from '@botplatform/database';
 import type { PlaybackStatus } from '@botplatform/shared';
 import { Readable } from 'node:stream';
 import type { ResolvedTrack } from '../resolver/types.js';
+import type { FlatPlaylist, YtDlpRunner } from '../resolver/ytdlp-runner.js';
 
 /** Controllable VoiceSession double mirroring the Discord adapter's behavior. */
 export class FakeVoiceSession implements VoiceSession {
@@ -87,6 +88,39 @@ export class FakeVoiceCapability implements VoiceCapability {
     this.joinCalls.push(channelId);
     this.activeSession = new FakeVoiceSession('guild-1', channelId, 'general');
     return this.activeSession;
+  }
+}
+
+/**
+ * In-memory YtDlpRunner double. Configure `jsonResult`/`flatPlaylistResult`
+ * (or the `*ShouldFail` flags) per test; `streamCalls` records every stream
+ * invocation so the lazy-open contract can be asserted.
+ */
+export class FakeYtDlpRunner implements YtDlpRunner {
+  jsonResult: unknown = {};
+  flatPlaylistResult: FlatPlaylist = { entries: [] };
+  isAvailable = true;
+  jsonShouldFail = false;
+  flatPlaylistShouldFail = false;
+  readonly streamCalls: string[][] = [];
+
+  async json(): Promise<unknown> {
+    if (this.jsonShouldFail) throw new Error('yt-dlp json failed');
+    return this.jsonResult;
+  }
+
+  async flatPlaylist(): Promise<FlatPlaylist> {
+    if (this.flatPlaylistShouldFail) throw new Error('yt-dlp playlist failed');
+    return this.flatPlaylistResult;
+  }
+
+  stream(args: string[]): Readable {
+    this.streamCalls.push(args);
+    return Readable.from([Buffer.from('audio')]);
+  }
+
+  async available(): Promise<boolean> {
+    return this.isAvailable;
   }
 }
 

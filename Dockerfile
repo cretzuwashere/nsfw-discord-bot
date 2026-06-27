@@ -85,6 +85,15 @@ COPY packages/custom-commands-module/package.json packages/custom-commands-modul
 COPY packages/reminders-module/package.json packages/reminders-module/package.json
 COPY packages/birthdays-module/package.json packages/birthdays-module/package.json
 COPY packages/automod-module/package.json packages/automod-module/package.json
+COPY packages/raise-hand-module/package.json packages/raise-hand-module/package.json
+COPY packages/fun-commands-module/package.json packages/fun-commands-module/package.json
+COPY packages/engagement-prompts-module/package.json packages/engagement-prompts-module/package.json
+COPY packages/giveaways-module/package.json packages/giveaways-module/package.json
+COPY packages/server-stats-module/package.json packages/server-stats-module/package.json
+COPY packages/trivia-module/package.json packages/trivia-module/package.json
+COPY packages/minigames-module/package.json packages/minigames-module/package.json
+COPY packages/economy-module/package.json packages/economy-module/package.json
+COPY packages/levels-module/package.json packages/levels-module/package.json
 COPY apps/bot/package.json apps/bot/package.json
 COPY apps/admin/package.json apps/admin/package.json
 COPY tests/e2e/package.json tests/e2e/package.json

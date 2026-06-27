@@ -9,6 +9,7 @@ describe('loadConfig', () => {
     expect(config.admin.port).toBe(3000);
     expect(config.bot.healthPort).toBe(8081);
     expect(config.audio.maxQueueSize).toBe(50);
+    expect(config.audio.maxPlaylistItems).toBe(100);
     expect(config.audio.maxTrackDurationSeconds).toBe(3600);
     expect(config.discord.enabled).toBe(false);
   });

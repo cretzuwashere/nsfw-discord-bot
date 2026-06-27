@@ -8,9 +8,18 @@ import { createDatabase, createDbAuditLog } from '@botplatform/database';
 import { registerSlashCommands } from '@botplatform/discord-adapter';
 import { createLogger } from '@botplatform/logger';
 import { createCustomCommandsModule } from '@botplatform/custom-commands-module';
+import { createEconomyModule } from '@botplatform/economy-module';
+import { createEngagementPromptsModule } from '@botplatform/engagement-prompts-module';
+import { createFunCommandsModule } from '@botplatform/fun-commands-module';
+import { createGiveawaysModule } from '@botplatform/giveaways-module';
+import { createLevelsModule } from '@botplatform/levels-module';
+import { createMinigamesModule } from '@botplatform/minigames-module';
 import { createModerationModule } from '@botplatform/moderation-module';
+import { createRaiseHandModule } from '@botplatform/raise-hand-module';
 import { createRemindersModule } from '@botplatform/reminders-module';
 import { createRoleMenusModule } from '@botplatform/role-menus-module';
+import { createServerStatsModule } from '@botplatform/server-stats-module';
+import { createTriviaModule } from '@botplatform/trivia-module';
 
 /** Registration only needs command shapes — modules never act here. */
 const NOOP_GUILD_PROVIDER: GuildServiceProvider = {
@@ -60,7 +69,25 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: NOOP_GUILD_PROVIDER,
   });
+  const raiseHand = createRaiseHandModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
   const customCommands = createCustomCommandsModule({ config, logger, db: database.db, audit });
+  const funCommands = createFunCommandsModule({ logger });
+  const engagementPrompts = createEngagementPromptsModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
+  const giveaways = createGiveawaysModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
   const reminders = createRemindersModule({
     config,
     logger,
@@ -75,14 +102,48 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: NOOP_GUILD_PROVIDER,
   });
+  const serverStats = createServerStatsModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
+  const trivia = createTriviaModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
+  const minigames = createMinigamesModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
+  const economy = createEconomyModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
+  const levels = createLevelsModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: NOOP_GUILD_PROVIDER,
+  });
   const commands = [
     ...audio.module.commands,
     ...moderation.module.commands,
     ...announcements.module.commands,
     ...roleMenus.module.commands,
+    ...raiseHand.module.commands,
     ...customCommands.module.commands,
+    ...funCommands.module.commands,
+    ...engagementPrompts.module.commands,
+    ...giveaways.module.commands,
     ...reminders.module.commands,
     ...birthdays.module.commands,
+    ...serverStats.module.commands,
+    ...trivia.module.commands,
+    ...minigames.module.commands,
+    ...economy.module.commands,
+    ...levels.module.commands,
   ];
 
   const count = await registerSlashCommands({

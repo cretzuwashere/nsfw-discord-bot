@@ -1,0 +1,48 @@
+<%- include('partials/head') %>
+<%- include('partials/nav') %>
+<h1>Fun Features — <%= def.title %></h1>
+<% if (saved) { %><div class="alert alert-ok" role="status">Settings saved.</div><% } %>
+
+<section class="card">
+  <nav class="subnav">
+    <% for (const m of modules) { %>
+      <a href="<%= m.href %>" class="<%= currentPath === m.href ? 'active' : '' %>"><%= m.label %></a>
+    <% } %>
+  </nav>
+</section>
+
+<% if (guilds.length === 0) { %>
+  <section class="card"><p class="muted">No servers yet — the bot records servers when it connects.</p></section>
+<% } else { %>
+<section class="card">
+  <p class="muted small">Configure <strong><%= def.title %></strong> per server. The module must be
+  <strong>enabled</strong> on the <a href="/modules">Modules</a> page for these settings to take effect
+  (the bot picks up changes within ~30 seconds).</p>
+  <form method="post" action="/fun-settings/<%= def.key %>/save">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label for="guildId">Server</label>
+    <select id="guildId" name="guildId" onchange="location.href='/fun-settings/<%= def.key %>?guild='+this.value">
+      <% for (const g of guilds) { %>
+        <option value="<%= g.id %>" <%= selectedGuildId === g.id ? 'selected' : '' %>><%= g.name || g.externalId %></option>
+      <% } %>
+    </select>
+
+    <% for (const f of def.fields) { %>
+      <% if (f.type === 'bool') { %>
+        <label class="checkbox-label"><input type="checkbox" name="<%= f.name %>" <%= values[f.name] ? 'checked' : '' %>> <%= f.label %></label>
+      <% } else if (f.type === 'textarea') { %>
+        <label for="<%= f.name %>"><%= f.label %></label>
+        <textarea id="<%= f.name %>" name="<%= f.name %>" rows="2"><%= values[f.name] ?? '' %></textarea>
+      <% } else { %>
+        <label for="<%= f.name %>"><%= f.label %></label>
+        <input id="<%= f.name %>" name="<%= f.name %>" type="<%= f.type === 'number' ? 'number' : 'text' %>" value="<%= values[f.name] ?? '' %>">
+      <% } %>
+      <% if (f.help) { %><p class="muted small"><%= f.help %></p><% } %>
+    <% } %>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+  <% if (def.note) { %><p class="muted small"><%= def.note %></p><% } %>
+</section>
+<% } %>
+<%- include('partials/footer') %>

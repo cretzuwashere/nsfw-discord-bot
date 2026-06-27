@@ -77,10 +77,27 @@ export interface ComponentInteractionEvent {
   update?(message: OutgoingMessage): Promise<void>;
 }
 
+/**
+ * A member's voice state changed (joined, left, or moved between voice
+ * channels). Emitted via the GuildVoiceStates intent (non-privileged, already
+ * enabled). `oldChannelId`/`newChannelId` are the voice channel snowflakes
+ * before/after the change; either is null when not in a voice channel.
+ * Mute/deafen-only changes keep both ids equal.
+ */
+export interface VoiceStateUpdateEvent {
+  type: 'voice.state.update';
+  adapterKey: string;
+  guild: PlatformGuildRef;
+  user: PlatformUserRef;
+  oldChannelId: string | null;
+  newChannelId: string | null;
+}
+
 export type PlatformEvent =
   | MemberJoinEvent
   | MemberLeaveEvent
   | MessageCreateEvent
-  | ComponentInteractionEvent;
+  | ComponentInteractionEvent
+  | VoiceStateUpdateEvent;
 
 export type PlatformEventType = PlatformEvent['type'];

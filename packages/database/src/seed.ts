@@ -88,6 +88,60 @@ export async function seed(db: Db, options: SeedOptions = {}): Promise<void> {
       description: 'Create text, embed and random-response commands.',
       defaultEnabled: false,
     },
+    {
+      key: MODULE_KEYS.raiseHand,
+      name: 'Speaker Queue',
+      description: 'Raise-hand speaking queue for voice channels with moderator controls and a button panel.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.funCommands,
+      name: 'Fun Commands',
+      description: 'Random fun slash commands: 8-ball, dice, coin flip, chooser and rock-paper-scissors.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.engagementPrompts,
+      name: 'Engagement Prompts',
+      description: 'Conversation starters: Question of the Day, Would You Rather, Truth or Dare and party games.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.giveaways,
+      name: 'Giveaways',
+      description: 'Run giveaways with a one-tap Enter button and an automatic scheduled draw.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.serverStats,
+      name: 'Server Stats',
+      description: 'Message-activity stats and a weekly highlights recap (counts only, no message content).',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.trivia,
+      name: 'Trivia',
+      description: 'Channel trivia rounds with button answers, a bundled question bank and a win leaderboard.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.minigames,
+      name: 'Mini-games',
+      description: 'Head-to-head Tic-Tac-Toe and Connect Four played with buttons.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.economy,
+      name: 'Economy',
+      description: 'Virtual currency: balances, daily/streak rewards, member transfers and a role shop.',
+      defaultEnabled: false,
+    },
+    {
+      key: MODULE_KEYS.levels,
+      name: 'Levels',
+      description: 'Earn XP from chatting, level up (with optional reward roles) and compete on a leaderboard.',
+      defaultEnabled: false,
+    },
   ];
   for (const module of builtInModules) {
     await modulesRepo.ensure(module);

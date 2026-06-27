@@ -179,6 +179,15 @@ importers:
       '@botplatform/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@botplatform/economy-module':
+        specifier: workspace:*
+        version: link:../../packages/economy-module
+      '@botplatform/engagement-prompts-module':
+        specifier: workspace:*
+        version: link:../../packages/engagement-prompts-module
+      '@botplatform/levels-module':
+        specifier: workspace:*
+        version: link:../../packages/levels-module
       '@botplatform/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -194,9 +203,15 @@ importers:
       '@botplatform/security':
         specifier: workspace:*
         version: link:../../packages/security
+      '@botplatform/server-stats-module':
+        specifier: workspace:*
+        version: link:../../packages/server-stats-module
       '@botplatform/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@botplatform/trivia-module':
+        specifier: workspace:*
+        version: link:../../packages/trivia-module
       '@botplatform/welcome-module':
         specifier: workspace:*
         version: link:../../packages/welcome-module
@@ -282,12 +297,33 @@ importers:
       '@botplatform/discord-adapter':
         specifier: workspace:*
         version: link:../../packages/discord-adapter
+      '@botplatform/economy-module':
+        specifier: workspace:*
+        version: link:../../packages/economy-module
+      '@botplatform/engagement-prompts-module':
+        specifier: workspace:*
+        version: link:../../packages/engagement-prompts-module
+      '@botplatform/fun-commands-module':
+        specifier: workspace:*
+        version: link:../../packages/fun-commands-module
+      '@botplatform/giveaways-module':
+        specifier: workspace:*
+        version: link:../../packages/giveaways-module
+      '@botplatform/levels-module':
+        specifier: workspace:*
+        version: link:../../packages/levels-module
       '@botplatform/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@botplatform/minigames-module':
+        specifier: workspace:*
+        version: link:../../packages/minigames-module
       '@botplatform/moderation-module':
         specifier: workspace:*
         version: link:../../packages/moderation-module
+      '@botplatform/raise-hand-module':
+        specifier: workspace:*
+        version: link:../../packages/raise-hand-module
       '@botplatform/reminders-module':
         specifier: workspace:*
         version: link:../../packages/reminders-module
@@ -300,9 +336,15 @@ importers:
       '@botplatform/security':
         specifier: workspace:*
         version: link:../../packages/security
+      '@botplatform/server-stats-module':
+        specifier: workspace:*
+        version: link:../../packages/server-stats-module
       '@botplatform/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@botplatform/trivia-module':
+        specifier: workspace:*
+        version: link:../../packages/trivia-module
       '@botplatform/welcome-module':
         specifier: workspace:*
         version: link:../../packages/welcome-module
@@ -645,6 +687,140 @@ importers:
         specifier: 'catalog:'
         version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
 
+  packages/economy-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/engagement-prompts-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/fun-commands-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/giveaways-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/levels-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
   packages/logger:
     dependencies:
       pino:
@@ -661,7 +837,66 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/minigames-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
   packages/moderation-module:
+    dependencies:
+      '@botplatform/config':
+        specifier: workspace:*
+        version: link:../config
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/raise-hand-module:
     dependencies:
       '@botplatform/config':
         specifier: workspace:*
@@ -819,7 +1054,63 @@ importers:
         specifier: 'catalog:'
         version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
 
+  packages/server-stats-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
   packages/shared:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
+  packages/trivia-module:
+    dependencies:
+      '@botplatform/core':
+        specifier: workspace:*
+        version: link:../core
+      '@botplatform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@botplatform/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@botplatform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.21.0)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

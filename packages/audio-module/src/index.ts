@@ -1,11 +1,13 @@
 import type { AppConfig } from '@botplatform/config';
-import type { BotModule } from '@botplatform/core';
+import type { BotModule, ComponentInteractionEvent } from '@botplatform/core';
 import type { PlaybackRepo } from '@botplatform/database';
 import type { Logger } from '@botplatform/logger';
 import type { InternalActionResult, QueueSnapshot } from '@botplatform/shared';
 import { MODULE_KEYS } from '@botplatform/shared';
 import { buildAudioCommands, buildAudioComponentHandler } from './commands.js';
 import { PlayerManager } from './engine/manager.js';
+import { buildRadioCommand, buildRadioComponentHandler } from './radio/commands.js';
+import { RadioRegistry } from './radio/registry.js';
 import { DirectHttpAudioProvider } from './resolver/providers/direct-http.js';
 import { SpotifyAudioProvider } from './resolver/providers/spotify-provider.js';
 import { YtDlpAudioProvider } from './resolver/providers/ytdlp-provider.js';
@@ -57,21 +59,43 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
     logger
   );
 
+  const resolveCtx = {
+    allowedDomains: options.config.audio.allowedDomains,
+    timeoutMs: options.config.audio.requestTimeoutMs,
+    logger,
+  };
+  const radioRegistry = new RadioRegistry();
+  const audioComponentHandler = buildAudioComponentHandler(manager);
+  const radioComponentHandler = buildRadioComponentHandler({
+    manager,
+    registry: radioRegistry,
+    resolveCtx,
+  });
+
   const module: BotModule = {
     key: MODULE_KEYS.audioPlayer,
     name: 'Audio Player',
     description: 'Voice channel audio playback with queue management.',
-    commands: buildAudioCommands({
-      manager,
-      resolver,
-      resolveCtx: {
-        allowedDomains: options.config.audio.allowedDomains,
-        timeoutMs: options.config.audio.requestTimeoutMs,
-        logger,
+    commands: [
+      ...buildAudioCommands({
+        manager,
+        resolver,
+        resolveCtx,
+        maxPlaylistItems: options.config.audio.maxPlaylistItems,
+      }),
+      buildRadioCommand({ manager, registry: radioRegistry, resolveCtx }),
+    ],
+    // The now-playing panel buttons (audio:) and the radio station select menu
+    // (radio:) both route here; each handler ignores customIds it doesn't own.
+    events: [
+      {
+        type: 'component.interaction',
+        handle: async (event: ComponentInteractionEvent) => {
+          await audioComponentHandler(event);
+          await radioComponentHandler(event);
+        },
       },
-    }),
-    // The now-playing panel's control buttons route back here.
-    events: [{ type: 'component.interaction', handle: buildAudioComponentHandler(manager) }],
+    ],
     async onLoad(ctx) {
       let streamingReady = false;
       if (ytdlpRunner) {
@@ -124,3 +148,15 @@ export {
   AUDIO_BUTTON_PREFIX,
 } from './now-playing.js';
 export { buildAudioComponentHandler } from './commands.js';
+export { classifyYouTubeUrl } from './resolver/youtube-url.js';
+export type { YouTubeUrlKind, YouTubeUrlInfo } from './resolver/youtube-url.js';
+export { RadioRegistry, isValidStreamUrl } from './radio/registry.js';
+export { RADIO_STATIONS } from './radio/stations.js';
+export type { RadioStation } from './radio/stations.js';
+export { buildRadioTrack } from './radio/radio-source.js';
+export {
+  buildRadioCommand,
+  buildRadioComponentHandler,
+  RADIO_SELECT_ID,
+  RADIO_COMPONENT_PREFIX,
+} from './radio/commands.js';

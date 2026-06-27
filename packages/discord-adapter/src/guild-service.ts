@@ -264,6 +264,15 @@ export class DiscordGuildService implements GuildService {
     return me.permissions.has(flag);
   }
 
+  async memberHasPermission(userExternalId: string, permission: string): Promise<boolean> {
+    const guild = await this.guild();
+    const member = await guild.members.fetch(userExternalId).catch(() => null);
+    if (!member) return false;
+    const flag = (PermissionsBitField.Flags as Record<string, bigint>)[permission];
+    if (flag === undefined) return false;
+    return member.permissions.has(flag);
+  }
+
   async getMemberRoleIds(userExternalId: string): Promise<string[]> {
     const guild = await this.guild();
     const member = await guild.members.fetch(userExternalId).catch(() => null);

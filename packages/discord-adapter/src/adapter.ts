@@ -14,6 +14,7 @@ import type {
   ReplyPayload,
   VoiceCapability,
   VoiceSession,
+  VoiceStateUpdateEvent,
 } from '@botplatform/core';
 import { ADAPTER_KEYS, GENERIC_USER_ERROR } from '@botplatform/shared';
 import {
@@ -26,6 +27,7 @@ import {
   type Interaction,
   type Message,
   type PartialGuildMember,
+  type VoiceState,
 } from 'discord.js';
 import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
 import { buildMessagePayload, DiscordGuildService } from './guild-service.js';
@@ -134,6 +136,9 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
     });
     client.on(Events.MessageCreate, (message) => {
       void this.emitMessageCreate(message);
+    });
+    client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+      void this.emitVoiceStateUpdate(oldState, newState);
     });
 
     try {
@@ -311,6 +316,28 @@ export class DiscordAdapter implements ChannelAdapter, GuildServiceProvider {
     };
     await ctx.dispatchEvent(event).catch((error) => {
       ctx.logger.error({ err: error }, 'message event dispatch failed');
+    });
+  }
+
+  private async emitVoiceStateUpdate(oldState: VoiceState, newState: VoiceState): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    // Ignore pure mute/deafen toggles where the channel did not change.
+    if (oldState.channelId === newState.channelId) return;
+    const member = newState.member ?? oldState.member;
+    const user = member?.user;
+    if (!user || user.bot) return;
+    const guild = newState.guild ?? oldState.guild;
+    const event: VoiceStateUpdateEvent = {
+      type: 'voice.state.update',
+      adapterKey: this.key,
+      guild: { id: null, externalId: guild.id, name: guild.name },
+      user: this.toUserRef(user),
+      oldChannelId: oldState.channelId,
+      newChannelId: newState.channelId,
+    };
+    await ctx.dispatchEvent(event).catch((error) => {
+      ctx.logger.error({ err: error }, 'voice state event dispatch failed');
     });
   }
 

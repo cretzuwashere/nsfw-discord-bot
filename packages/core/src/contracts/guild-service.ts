@@ -95,6 +95,12 @@ export interface GuildService {
 
   /** Does the bot hold the named Discord permission in this guild/channel? */
   botHasPermission(permission: string, channelId?: string): Promise<boolean>;
+  /**
+   * Does the named member hold the named Discord permission in this guild?
+   * Used to re-check moderator gating server-side for button interactions
+   * (Discord cannot gate components by permission the way it gates commands).
+   */
+  memberHasPermission(userExternalId: string, permission: string): Promise<boolean>;
   /** The invoking member's role ids → for permission checks. */
   getMemberRoleIds(userExternalId: string): Promise<string[]>;
   /** Whether the user is the guild owner. */

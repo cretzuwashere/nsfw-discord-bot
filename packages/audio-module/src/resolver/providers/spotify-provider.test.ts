@@ -28,6 +28,7 @@ function oembedResponse(json: unknown) {
 function runner(searchResult: unknown): YtDlpRunner {
   return {
     json: vi.fn(async () => searchResult),
+    flatPlaylist: vi.fn(async () => ({ entries: [] })),
     stream: vi.fn(() => Readable.from([Buffer.from('audio')])),
     available: vi.fn(async () => true),
   };

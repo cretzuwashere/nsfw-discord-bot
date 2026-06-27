@@ -17,6 +17,20 @@ export class PlaybackQueue {
     return { ok: true, position: this.items.length };
   }
 
+  /**
+   * Append as many tracks as fit within the bound. Returns how many were
+   * accepted and how many were dropped because the queue filled up.
+   */
+  enqueueMany(tracks: readonly ResolvedTrack[]): { accepted: number; rejected: number } {
+    let accepted = 0;
+    for (const track of tracks) {
+      if (this.items.length >= this.maxSize) break;
+      this.items.push(track);
+      accepted++;
+    }
+    return { accepted, rejected: tracks.length - accepted };
+  }
+
   dequeue(): ResolvedTrack | undefined {
     return this.items.shift();
   }

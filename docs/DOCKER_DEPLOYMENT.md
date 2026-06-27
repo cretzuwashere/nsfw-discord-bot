@@ -112,5 +112,8 @@ compose), but aren't required.
   usually `DATABASE_URL` doesn't match `POSTGRES_*`.
 - Panel unreachable → is `ADMIN_PORT` free on the host? `docker compose ps`
   healthy? See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
-- Bot container unhealthy → almost always an invalid `DISCORD_TOKEN`; the
-  health endpoint reports the Discord adapter state honestly.
+- Bot online but Discord features dead → likely an invalid `DISCORD_TOKEN`. A
+  bad token does **not** make the bot container unhealthy (by design — it stays
+  healthy so a token problem can't trigger a restart loop); the health endpoint
+  reports the real adapter state in `checks.discord.detail`. Diagnose via that,
+  the admin dashboard, or `docker compose logs bot` — not `docker compose ps`.

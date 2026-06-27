@@ -1,7 +1,7 @@
 import type { TrackSummary } from '@botplatform/shared';
 import { UserFacingError } from '@botplatform/shared';
-import type { AudioProvider, ResolveContext, ResolvedTrack } from '../types.js';
-import type { YtDlpRunner } from '../ytdlp-runner.js';
+import type { AudioProvider, PlaylistResolution, ResolveContext, ResolvedTrack } from '../types.js';
+import type { FlatPlaylistEntry, YtDlpRunner } from '../ytdlp-runner.js';
 
 /**
  * Resolves YouTube and SoundCloud links (and other yt-dlp-supported sites)
@@ -64,7 +64,12 @@ export class YtDlpAudioProvider implements AudioProvider {
       typeof meta.duration === 'number' && Number.isFinite(meta.duration)
         ? Math.round(meta.duration)
         : undefined;
-    if (durationSeconds !== undefined && durationSeconds > this.options.maxTrackDurationSeconds) {
+    // A limit of 0 means "unlimited" — skip the up-front reject entirely.
+    if (
+      this.options.maxTrackDurationSeconds > 0 &&
+      durationSeconds !== undefined &&
+      durationSeconds > this.options.maxTrackDurationSeconds
+    ) {
       throw new UserFacingError(
         'TRACK_TOO_LONG',
         `That track is too long (limit ${this.options.maxTrackDurationSeconds}s).`
@@ -78,24 +83,93 @@ export class YtDlpAudioProvider implements AudioProvider {
       durationSeconds,
     };
 
+    return { metadata, source: this.streamSource(metadata, rawUrl) };
+  }
+
+  /**
+   * Expand a YouTube playlist into queueable tracks. Entries are flat-listed
+   * once (no per-item extraction) and each becomes a track whose stream is
+   * opened lazily — identical to single-video playback — when it reaches the
+   * front of the queue.
+   */
+  async resolvePlaylist(
+    rawUrl: string,
+    ctx: ResolveContext,
+    limit: number
+  ): Promise<PlaylistResolution> {
+    const playlist = await this.runner.flatPlaylist(rawUrl, ctx.timeoutMs);
+    const entries = playlist.entries ?? [];
+    const max = this.options.maxTrackDurationSeconds;
+    const tracks: ResolvedTrack[] = [];
+    let skipped = 0;
+
+    for (const entry of entries) {
+      const url = entryUrl(entry);
+      const durationSeconds =
+        typeof entry.duration === 'number' && Number.isFinite(entry.duration)
+          ? Math.round(entry.duration)
+          : undefined;
+      const tooLong = max > 0 && durationSeconds !== undefined && durationSeconds > max;
+      if (!url || isUnavailable(entry) || tooLong) {
+        skipped++;
+        continue;
+      }
+      // Playable but beyond the cap: stop adding, but keep iterating so the
+      // `skipped` count stays accurate (the caller derives the capped count).
+      if (tracks.length >= limit) continue;
+
+      const metadata: TrackSummary = {
+        title: entry.title?.trim() || 'Unknown track',
+        url,
+        provider: 'youtube',
+        durationSeconds,
+      };
+      tracks.push({ metadata, source: this.streamSource(metadata, url) });
+    }
+
+    return { tracks, total: entries.length, skipped, title: playlist.title };
+  }
+
+  private streamSource(metadata: TrackSummary, url: string): ResolvedTrack['source'] {
     return {
+      inputType: 'arbitrary',
       metadata,
-      source: {
-        inputType: 'arbitrary',
-        metadata,
-        // Lazy: the downloader starts only when playback begins.
-        createStream: async () =>
-          this.runner.stream([
-            '-f',
-            'bestaudio/best',
-            '-o',
-            '-', // stream to stdout
-            '--',
-            rawUrl,
-          ]),
-      },
+      // Lazy: the downloader starts only when playback begins.
+      createStream: async () =>
+        this.runner.stream([
+          '-f',
+          'bestaudio/best',
+          '-o',
+          '-', // stream to stdout
+          '--',
+          url,
+        ]),
     };
   }
+}
+
+/** Build a playable URL from a flat-playlist entry (full URL or bare id). */
+function entryUrl(entry: FlatPlaylistEntry): string | null {
+  if (entry.webpage_url && /^https?:\/\//i.test(entry.webpage_url)) return entry.webpage_url;
+  if (entry.url && /^https?:\/\//i.test(entry.url)) return entry.url;
+  if (entry.id) return `https://www.youtube.com/watch?v=${entry.id}`;
+  if (entry.url) return `https://www.youtube.com/watch?v=${entry.url}`;
+  return null;
+}
+
+/** Drop private/deleted/region-locked entries that can never play. */
+function isUnavailable(entry: FlatPlaylistEntry): boolean {
+  const title = (entry.title ?? '').toLowerCase();
+  if (
+    title.includes('[private video]') ||
+    title.includes('[deleted video]') ||
+    title.includes('[unavailable video]')
+  ) {
+    return true;
+  }
+  const availability = entry.availability?.toLowerCase();
+  if (availability && availability !== 'public' && availability !== 'unlisted') return true;
+  return false;
 }
 
 function providerLabel(extractorKey: string | undefined): string {

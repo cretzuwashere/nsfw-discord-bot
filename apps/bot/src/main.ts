@@ -4,9 +4,18 @@ import { createAutomodModule } from '@botplatform/automod-module';
 import { createBirthdaysModule } from '@botplatform/birthdays-module';
 import { createCardsModule } from '@botplatform/cards-module';
 import { createCustomCommandsModule } from '@botplatform/custom-commands-module';
+import { createEconomyModule } from '@botplatform/economy-module';
+import { createEngagementPromptsModule } from '@botplatform/engagement-prompts-module';
+import { createFunCommandsModule } from '@botplatform/fun-commands-module';
+import { createGiveawaysModule } from '@botplatform/giveaways-module';
+import { createLevelsModule } from '@botplatform/levels-module';
+import { createMinigamesModule } from '@botplatform/minigames-module';
+import { createRaiseHandModule } from '@botplatform/raise-hand-module';
 import { createRemindersModule } from '@botplatform/reminders-module';
 import { createRoleMenusModule } from '@botplatform/role-menus-module';
 import { createScheduledMessagesModule } from '@botplatform/scheduled-messages-module';
+import { createServerStatsModule } from '@botplatform/server-stats-module';
+import { createTriviaModule } from '@botplatform/trivia-module';
 import { createWelcomeModule } from '@botplatform/welcome-module';
 import { loadConfig } from '@botplatform/config';
 import { BotKernel, CachedModuleState } from '@botplatform/core';
@@ -77,6 +86,13 @@ async function main(): Promise<void> {
     audit,
     guildServiceProvider: adapter,
   });
+  const raiseHandHandle = createRaiseHandModule({
+    config,
+    logger,
+    db: database.db,
+    audit,
+    guildServiceProvider: adapter,
+  });
   const scheduledMessagesHandle = createScheduledMessagesModule({
     config,
     logger,
@@ -85,6 +101,42 @@ async function main(): Promise<void> {
     guildServiceProvider: adapter,
   });
   const customCommandsHandle = createCustomCommandsModule({ config, logger, db: database.db, audit });
+  const funCommandsHandle = createFunCommandsModule({ logger });
+  const engagementPromptsHandle = createEngagementPromptsModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
+  const giveawaysHandle = createGiveawaysModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
+  const serverStatsHandle = createServerStatsModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
+  const triviaHandle = createTriviaModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
+  const minigamesHandle = createMinigamesModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
+  const economyHandle = createEconomyModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
+  const levelsHandle = createLevelsModule({
+    logger,
+    db: database.db,
+    guildServiceProvider: adapter,
+  });
   const remindersHandle = createRemindersModule({
     config,
     logger,
@@ -124,11 +176,20 @@ async function main(): Promise<void> {
       cardsHandle.module,
       welcomeHandle.module,
       roleMenusHandle.module,
+      raiseHandHandle.module,
       scheduledMessagesHandle.module,
       customCommandsHandle.module,
       remindersHandle.module,
       birthdaysHandle.module,
       automodHandle.module,
+      funCommandsHandle.module,
+      engagementPromptsHandle.module,
+      giveawaysHandle.module,
+      serverStatsHandle.module,
+      triviaHandle.module,
+      minigamesHandle.module,
+      economyHandle.module,
+      levelsHandle.module,
     ],
     adapters: [adapter],
     audit,
@@ -144,6 +205,11 @@ async function main(): Promise<void> {
   kernel.scheduler.register(scheduledMessagesHandle.schedulerJob);
   kernel.scheduler.register(remindersHandle.schedulerJob);
   kernel.scheduler.register(birthdaysHandle.schedulerJob);
+  kernel.scheduler.register(engagementPromptsHandle.schedulerJob);
+  kernel.scheduler.register(giveawaysHandle.schedulerJob);
+  for (const job of serverStatsHandle.schedulerJobs) kernel.scheduler.register(job);
+  for (const job of triviaHandle.schedulerJobs) kernel.scheduler.register(job);
+  kernel.scheduler.register(minigamesHandle.schedulerJob);
 
   kernel.health.register(createDbHealthIndicator(database.db));
   kernel.health.register({

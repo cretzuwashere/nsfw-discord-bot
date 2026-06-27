@@ -804,3 +804,413 @@ export const customCommands = pgTable(
   },
   (table) => [uniqueIndex('custom_commands_guild_name_idx').on(table.guildId, table.name)]
 );
+
+// --- Speaker queue (raise hand) --------------------------------------------
+
+/** One queue per (guild, voice channel). Holds the persistent panel refs. */
+export const speakerQueues = pgTable(
+  'speaker_queues',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    /** Discord voice channel snowflake the queue is scoped to. */
+    voiceChannelId: text('voice_channel_id').notNull(),
+    /** Cached channel name for rendering the panel without an extra fetch. */
+    voiceChannelName: text('voice_channel_name').notNull().default(''),
+    /** Persistent control-panel message location (null until /speaker-panel). */
+    panelChannelId: text('panel_channel_id'),
+    panelMessageId: text('panel_message_id'),
+    /** Where "next to speak" announcements post (defaults to the panel channel). */
+    announceChannelId: text('announce_channel_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('speaker_queues_guild_channel_idx').on(table.guildId, table.voiceChannelId)]
+);
+
+/** One raised hand. status: 'waiting' | 'active' | 'done'. */
+export const speakerQueueEntries = pgTable(
+  'speaker_queue_entries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    queueId: uuid('queue_id')
+      .notNull()
+      .references(() => speakerQueues.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    displayName: text('display_name').notNull().default(''),
+    /** 'waiting' | 'active' | 'done'. */
+    status: text('status').notNull().default('waiting'),
+    /** Higher = closer to the front; moderator /promote-speaker raises it. */
+    priority: integer('priority').notNull().default(0),
+    raisedAt: timestamp('raised_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('speaker_queue_entries_queue_idx').on(table.queueId),
+    // A user holds at most ONE live (non-done) entry per queue (dedupe).
+    uniqueIndex('speaker_queue_entries_active_user_idx')
+      .on(table.queueId, table.userExternalId)
+      .where(sql`status <> 'done'`),
+  ]
+);
+
+// --- Engagement prompts (QOTD / WYR / party games) -------------------------
+
+/** One row per guild: daily QOTD config + recent-prompt ring buffers. */
+export const promptSettings = pgTable('prompt_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  /** Channel the daily Question of the Day posts to (null = daily off). */
+  qotdChannelId: text('qotd_channel_id'),
+  qotdEnabled: boolean('qotd_enabled').notNull().default(false),
+  /** UTC hour (0-23) the daily QOTD posts at. */
+  qotdHourUtc: integer('qotd_hour_utc').notNull().default(12),
+  /** 'YYYY-MM-DD' (UTC) of the last daily post, for once-per-day dedup. */
+  lastQotdDate: text('last_qotd_date'),
+  /** category -> recently-used prompt indices (ring buffer, avoids repeats). */
+  recent: jsonb('recent')
+    .$type<Record<string, number[]>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Giveaways -------------------------------------------------------------
+
+/** A giveaway. status: 'active' | 'ended' | 'canceled'. */
+export const giveaways = pgTable(
+  'giveaways',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id').notNull(),
+    /** Set after the giveaway message is posted. */
+    messageId: text('message_id'),
+    prize: text('prize').notNull(),
+    winnersCount: integer('winners_count').notNull().default(1),
+    hostExternalId: text('host_external_id').notNull(),
+    status: text('status').notNull().default('active'),
+    /** Drawn winner external ids (filled at draw / reroll). */
+    winners: jsonb('winners').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('giveaways_guild_idx').on(table.guildId),
+    index('giveaways_due_idx').on(table.status, table.endsAt),
+  ]
+);
+
+/** One entry per user per giveaway (unique). */
+export const giveawayEntries = pgTable(
+  'giveaway_entries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    giveawayId: uuid('giveaway_id')
+      .notNull()
+      .references(() => giveaways.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('giveaway_entries_unique_idx').on(table.giveawayId, table.userExternalId),
+  ]
+);
+
+// --- Server stats (message-activity counts, no content) --------------------
+
+/** Per-user per-day message counts (UTC date as 'YYYY-MM-DD' text). */
+export const activityUserDaily = pgTable(
+  'activity_user_daily',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    date: text('date').notNull(),
+    messages: integer('messages').notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex('activity_user_daily_unique_idx').on(table.guildId, table.userExternalId, table.date),
+    index('activity_user_daily_guild_date_idx').on(table.guildId, table.date),
+  ]
+);
+
+/** Per-channel per-day message counts. */
+export const activityChannelDaily = pgTable(
+  'activity_channel_daily',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id').notNull(),
+    date: text('date').notNull(),
+    messages: integer('messages').notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex('activity_channel_daily_unique_idx').on(table.guildId, table.channelId, table.date),
+    index('activity_channel_daily_guild_date_idx').on(table.guildId, table.date),
+  ]
+);
+
+/** Per-guild weekly-recap configuration. */
+export const serverStatsSettings = pgTable('serverstats_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  recapChannelId: text('recap_channel_id'),
+  recapEnabled: boolean('recap_enabled').notNull().default(false),
+  /** Day of week 0=Sun..6=Sat. */
+  recapDow: integer('recap_dow').notNull().default(1),
+  recapHourUtc: integer('recap_hour_utc').notNull().default(12),
+  lastRecapDate: text('last_recap_date'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Trivia ----------------------------------------------------------------
+
+/** A trivia round in a channel. status: 'open' | 'resolved'. */
+export const triviaRounds = pgTable(
+  'trivia_rounds',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id').notNull(),
+    messageId: text('message_id'),
+    /** Index into the bundled question bank. */
+    questionIndex: integer('question_index').notNull(),
+    correctIndex: integer('correct_index').notNull(),
+    status: text('status').notNull().default('open'),
+    winnerExternalId: text('winner_external_id'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('trivia_rounds_guild_status_idx').on(table.guildId, table.status),
+    index('trivia_rounds_channel_idx').on(table.channelId, table.status),
+  ]
+);
+
+/** One answer per user per round (unique) — prevents re-answering. */
+export const triviaAnswers = pgTable(
+  'trivia_answers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    roundId: uuid('round_id')
+      .notNull()
+      .references(() => triviaRounds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    correct: boolean('correct').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('trivia_answers_round_user_idx').on(table.roundId, table.userExternalId)]
+);
+
+/** Per-guild win totals. */
+export const triviaScores = pgTable(
+  'trivia_scores',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    wins: integer('wins').notNull().default(0),
+  },
+  (table) => [uniqueIndex('trivia_scores_guild_user_idx').on(table.guildId, table.userExternalId)]
+);
+
+/** Per-guild auto-trivia config + recent-question ring. */
+export const triviaSettings = pgTable('trivia_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  autoChannelId: text('auto_channel_id'),
+  autoEnabled: boolean('auto_enabled').notNull().default(false),
+  autoIntervalMin: integer('auto_interval_min').notNull().default(360),
+  lastAutoAt: timestamp('last_auto_at', { withTimezone: true }),
+  recent: jsonb('recent').$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Mini-games (PvP: tic-tac-toe, connect four) ---------------------------
+
+/** A two-player board game session. game: 'ttt'|'c4'; status: 'pending'|'active'|'finished'|'expired'. */
+export const minigameSessions = pgTable(
+  'minigame_sessions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id').notNull(),
+    messageId: text('message_id'),
+    game: text('game').notNull(),
+    /** Challenger (plays first, mark X / 1). */
+    playerX: text('player_x').notNull(),
+    /** Challenged player (mark O / 2). */
+    playerO: text('player_o').notNull(),
+    /** Flat board: 0 empty, 1 X, 2 O. */
+    board: jsonb('board').$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Whose turn: 'X' | 'O'. */
+    turn: text('turn').notNull().default('X'),
+    status: text('status').notNull().default('pending'),
+    /** 'X' | 'O' | 'draw' | null. */
+    winner: text('winner'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('minigame_sessions_status_idx').on(table.status),
+    index('minigame_sessions_guild_idx').on(table.guildId),
+  ]
+);
+
+// --- Economy (virtual currency, no real money) -----------------------------
+
+/** Per-member currency account (+ daily-claim state). */
+export const economyAccounts = pgTable(
+  'economy_accounts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    balance: integer('balance').notNull().default(0),
+    /** 'YYYY-MM-DD' (UTC) of the last /daily claim. */
+    lastDailyDate: text('last_daily_date'),
+    streak: integer('streak').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('economy_accounts_guild_user_idx').on(table.guildId, table.userExternalId),
+    index('economy_accounts_guild_balance_idx').on(table.guildId, table.balance),
+  ]
+);
+
+/** Append-only ledger of every balance change (audit + anti-abuse). */
+export const economyTransactions = pgTable(
+  'economy_transactions',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    delta: integer('delta').notNull(),
+    reason: text('reason').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('economy_transactions_guild_user_idx').on(table.guildId, table.userExternalId)]
+);
+
+/** Per-guild currency cosmetics + daily/streak tuning. */
+export const economySettings = pgTable('economy_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  currencyName: text('currency_name').notNull().default('coins'),
+  currencyEmoji: text('currency_emoji').notNull().default('🪙'),
+  startingBalance: integer('starting_balance').notNull().default(0),
+  dailyAmount: integer('daily_amount').notNull().default(100),
+  dailyStreakBonus: integer('daily_streak_bonus').notNull().default(10),
+  dailyStreakCap: integer('daily_streak_cap').notNull().default(30),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A purchasable shop item (role/perk). */
+export const shopItems = pgTable(
+  'shop_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull().default('role'),
+    roleId: text('role_id').notNull(),
+    label: text('label').notNull().default(''),
+    price: integer('price').notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('shop_items_guild_idx').on(table.guildId)]
+);
+
+/** Record of a completed purchase. */
+export const shopPurchases = pgTable(
+  'shop_purchases',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    itemId: uuid('item_id').references(() => shopItems.id, { onDelete: 'set null' }),
+    pricePaid: integer('price_paid').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('shop_purchases_guild_user_idx').on(table.guildId, table.userExternalId)]
+);
+
+// --- Levels (count-based XP + leaderboards) --------------------------------
+
+/** Per-member XP/level state (XP earned from message activity, not content). */
+export const levelMembers = pgTable(
+  'level_members',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    userExternalId: text('user_external_id').notNull(),
+    xp: integer('xp').notNull().default(0),
+    level: integer('level').notNull().default(0),
+    messages: integer('messages').notNull().default(0),
+    lastAwardAt: timestamp('last_award_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('level_members_guild_user_idx').on(table.guildId, table.userExternalId),
+    index('level_members_guild_xp_idx').on(table.guildId, table.xp),
+  ]
+);
+
+/** Level → reward role mapping (granted on reaching the level). */
+export const levelRewards = pgTable(
+  'level_rewards',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    level: integer('level').notNull(),
+    roleId: text('role_id').notNull(),
+  },
+  (table) => [uniqueIndex('level_rewards_guild_level_idx').on(table.guildId, table.level)]
+);
+
+/** Per-guild leveling configuration. */
+export const levelSettings = pgTable('level_settings', {
+  guildId: uuid('guild_id')
+    .primaryKey()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(false),
+  /** Null = announce in the channel where the level-up happened. */
+  announceChannelId: text('announce_channel_id'),
+  levelUpMessage: text('level_up_message').notNull().default('🎉 {user} reached level **{level}**!'),
+  noXpChannelIds: jsonb('no_xp_channel_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  xpMin: integer('xp_min').notNull().default(15),
+  xpMax: integer('xp_max').notNull().default(25),
+  cooldownSeconds: integer('cooldown_seconds').notNull().default(60),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

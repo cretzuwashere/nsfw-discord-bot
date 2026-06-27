@@ -43,7 +43,10 @@ const envSchema = z.object({
 
   ALLOWED_AUDIO_DOMAINS: z.string().optional().default(''),
   MAX_QUEUE_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
-  MAX_TRACK_DURATION_SECONDS: z.coerce.number().int().min(1).default(3600),
+  /** Max number of items pulled from a single YouTube playlist. */
+  MAX_PLAYLIST_ITEMS: z.coerce.number().int().min(1).max(1000).default(100),
+  /** Per-track duration cap in seconds. 0 = unlimited (allow multi-hour tracks). */
+  MAX_TRACK_DURATION_SECONDS: z.coerce.number().int().min(0).default(3600),
   AUDIO_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).default(15000),
   AUDIO_ENABLE_STREAMING_SOURCES: z
     .string()
@@ -104,6 +107,9 @@ export interface AppConfig {
     /** Lowercased domain allowlist; empty array = any public domain allowed. */
     allowedDomains: string[];
     maxQueueSize: number;
+    /** Max items pulled from a single YouTube playlist. */
+    maxPlaylistItems: number;
+    /** Per-track duration cap in seconds; 0 = unlimited. */
     maxTrackDurationSeconds: number;
     requestTimeoutMs: number;
     /** YouTube/SoundCloud/Spotify providers (yt-dlp based). */
@@ -162,6 +168,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     audio: {
       allowedDomains: parseCsvList(e.ALLOWED_AUDIO_DOMAINS),
       maxQueueSize: e.MAX_QUEUE_SIZE,
+      maxPlaylistItems: e.MAX_PLAYLIST_ITEMS,
       maxTrackDurationSeconds: e.MAX_TRACK_DURATION_SECONDS,
       requestTimeoutMs: e.AUDIO_REQUEST_TIMEOUT_MS,
       enableStreamingSources: e.AUDIO_ENABLE_STREAMING_SOURCES,

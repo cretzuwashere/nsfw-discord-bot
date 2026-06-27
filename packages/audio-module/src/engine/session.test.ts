@@ -154,6 +154,60 @@ describe('GuildPlaybackSession', () => {
     expect(repo?.history[0]).toMatchObject({ track: 'endless', status: 'skipped' });
   });
 
+  it('does not arm the duration watchdog when the limit is 0 (unlimited)', async () => {
+    vi.useFakeTimers();
+    const { session, voice } = makeSession({
+      limits: { maxQueueSize: 5, maxTrackDurationSeconds: 0 },
+    });
+    await session.enqueueOrPlay(fakeTrack('multi-hour'));
+    await vi.advanceTimersByTimeAsync(10_000_000); // ~2.7h
+    expect(session.isActive).toBe(true);
+    expect(voice.status).toBe('playing');
+  });
+
+  it('does not arm the watchdog for a live track even with a positive limit', async () => {
+    vi.useFakeTimers();
+    const { session } = makeSession({
+      limits: { maxQueueSize: 5, maxTrackDurationSeconds: 5 },
+    });
+    await session.enqueueOrPlay({ ...fakeTrack('radio'), isLive: true });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(session.isActive).toBe(true);
+  });
+
+  describe('enqueueMany (playlists)', () => {
+    it('plays the first and queues the rest when idle', async () => {
+      const { session, voice } = makeSession();
+      const result = await session.enqueueMany([fakeTrack('a'), fakeTrack('b'), fakeTrack('c')]);
+      expect(result).toMatchObject({ startedPlaying: true, accepted: 3, rejected: 0 });
+      expect(voice.playCalls).toHaveLength(1);
+      expect(session.getSnapshot().nowPlaying?.title).toBe('a');
+      expect(session.getSnapshot().queue.map((t) => t.title)).toEqual(['b', 'c']);
+    });
+
+    it('queues everything when already playing', async () => {
+      const { session } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('current'));
+      const result = await session.enqueueMany([fakeTrack('x'), fakeTrack('y')]);
+      expect(result).toMatchObject({ startedPlaying: false, accepted: 2 });
+      expect(session.getSnapshot().queue.map((t) => t.title)).toEqual(['x', 'y']);
+    });
+
+    it('drops items beyond the queue bound', async () => {
+      const { session } = makeSession({
+        limits: { maxQueueSize: 2, maxTrackDurationSeconds: 3600 },
+      });
+      const result = await session.enqueueMany([
+        fakeTrack('a'),
+        fakeTrack('b'),
+        fakeTrack('c'),
+        fakeTrack('d'),
+      ]);
+      expect(result.accepted).toBe(2);
+      expect(result.rejected).toBe(2);
+    });
+  });
+
   it('snapshot reflects live state', async () => {
     const { session } = makeSession();
     await session.enqueueOrPlay(fakeTrack('current'));

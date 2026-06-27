@@ -10,6 +10,9 @@ export default tseslint.config(
       '**/playwright-report/**',
       '**/test-results/**',
       '**/*.d.ts',
+      // Nested git worktrees (e.g. .claude/worktrees/*) are separate checkouts;
+      // linting them creates duplicate-tsconfig-root parse errors.
+      '**/.claude/**',
     ],
   },
   js.configs.recommended,

@@ -12,6 +12,7 @@ export const DISCORD_OPTION_TYPES = {
   boolean: 5,
   user: 6,
   channel: 7,
+  role: 8,
 } as const;
 
 interface DiscordOptionJson {

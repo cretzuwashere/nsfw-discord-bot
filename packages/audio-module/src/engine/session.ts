@@ -79,6 +79,34 @@ export class GuildPlaybackSession {
     return { status: 'queued', position: result.position };
   }
 
+  /**
+   * Enqueue a batch (e.g. a playlist). Starts playback with the first track if
+   * idle; the rest fill the queue up to its bound. `accepted` is how many of
+   * the batch were taken in (played or queued); `rejected` is how many were
+   * dropped because the queue was full.
+   */
+  async enqueueMany(
+    tracks: readonly ResolvedTrack[]
+  ): Promise<{ startedPlaying: boolean; accepted: number; rejected: number }> {
+    const { accepted, rejected } = this.queue.enqueueMany(tracks);
+    this.persistQueue();
+    let startedPlaying = false;
+    if (!this.nowPlaying && this.queue.size > 0) {
+      const first = this.queue.dequeue();
+      this.persistQueue();
+      if (first) {
+        try {
+          await this.playNow(first);
+          startedPlaying = true;
+        } catch {
+          // playNow recorded the failure; try to keep going with the rest.
+          void this.advance();
+        }
+      }
+    }
+    return { startedPlaying, accepted, rejected };
+  }
+
   /** Skip the current track; starts the next one when available. */
   async skip(): Promise<{ hadTrack: boolean; next: TrackSummary | null }> {
     if (!this.nowPlaying) return { hadTrack: false, next: null };
@@ -265,6 +293,10 @@ export class GuildPlaybackSession {
 
   private armDurationTimer(): void {
     this.clearDurationTimer();
+    // 0 = unlimited, and live sources (radio) run indefinitely — no watchdog.
+    if (this.limits.maxTrackDurationSeconds <= 0 || this.nowPlaying?.isLive) {
+      return;
+    }
     const ms = this.limits.maxTrackDurationSeconds * 1000;
     this.durationTimer = setTimeout(() => {
       this.logger.info(

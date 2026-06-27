@@ -14,22 +14,26 @@ interface Harness {
   manager: PlayerManager;
   voice: FakeVoiceCapability;
   resolve: ReturnType<typeof vi.fn>;
+  resolvePlaylist: ReturnType<typeof vi.fn>;
 }
 
 function makeHarness(): Harness {
   const manager = new PlayerManager(LIMITS, null, createSilentLogger());
   const resolve = vi.fn(async (rawUrl: string) => fakeTrack(rawUrl.split('/').pop() ?? 'track'));
-  const resolver = { resolve } as unknown as AudioResolver;
+  const resolvePlaylist = vi.fn(async () => ({ tracks: [], total: 0, skipped: 0 }));
+  const resolver = { resolve, resolvePlaylist } as unknown as AudioResolver;
   const list = buildAudioCommands({
     manager,
     resolver,
     resolveCtx: { allowedDomains: [], timeoutMs: 5000, logger: createSilentLogger() },
+    maxPlaylistItems: 100,
   });
   return {
     commands: new Map(list.map((command) => [command.name, command])),
     manager,
     voice: new FakeVoiceCapability(),
     resolve,
+    resolvePlaylist,
   };
 }
 
@@ -98,7 +102,7 @@ describe('command registration', () => {
   it('exposes all audio commands, all guild-only', () => {
     const names = [...harness.commands.keys()].sort();
     expect(names).toEqual(
-      ['controls', 'join', 'leave', 'nowplaying', 'pause', 'play', 'queue', 'resume', 'skip', 'stop'].sort()
+      ['controls', 'join', 'leave', 'nowplaying', 'pause', 'play', 'playlist', 'queue', 'resume', 'skip', 'stop'].sort()
     );
     for (const command of harness.commands.values()) {
       expect(command.guildOnly).toBe(true);
@@ -202,6 +206,73 @@ describe('/play', () => {
     await run(harness, 'play', { url: 'https://example.com/one.mp3' });
     const snapshot = harness.manager.get('guild-1')!.getSnapshot();
     expect(snapshot.nowPlaying?.requestedBy).toBe('Tester');
+  });
+});
+
+describe('/play + /playlist (YouTube playlists)', () => {
+  it('auto-expands a pure playlist link via /play', async () => {
+    harness.resolvePlaylist.mockResolvedValue({
+      tracks: [fakeTrack('a'), fakeTrack('b')],
+      total: 2,
+      skipped: 0,
+    });
+    const ctx = await run(harness, 'play', { url: 'https://www.youtube.com/playlist?list=PL123' });
+    expect(harness.resolvePlaylist).toHaveBeenCalledOnce();
+    expect(harness.resolve).not.toHaveBeenCalled();
+    expect(ctx.replies[0]?.content).toMatch(/Added \*\*2\*\* of 2/);
+  });
+
+  it('plays the selected video then loads the rest of the playlist for a watch?v=…&list=… link', async () => {
+    harness.resolvePlaylist.mockResolvedValue({
+      tracks: [fakeTrack('abc'), fakeTrack('d'), fakeTrack('e')],
+      total: 3,
+      skipped: 0,
+    });
+    const ctx = await run(harness, 'play', {
+      url: 'https://www.youtube.com/watch?v=abc&list=PL123',
+    });
+    expect(harness.resolve).toHaveBeenCalledOnce(); // the chosen video
+    expect(harness.resolvePlaylist).toHaveBeenCalledOnce(); // the rest of the list
+    // 'abc' (the chosen video) is filtered out of the playlist → 2 more queued.
+    expect(ctx.replies[0]?.content).toMatch(/queued \*\*2\*\* more track\(s\) from the playlist/i);
+  });
+
+  it('still plays the chosen video if loading the rest of the playlist fails', async () => {
+    harness.resolvePlaylist.mockRejectedValue(new Error('yt-dlp down'));
+    const ctx = await run(harness, 'play', {
+      url: 'https://www.youtube.com/watch?v=abc&list=PL123',
+    });
+    expect(harness.resolve).toHaveBeenCalledOnce();
+    expect(ctx.replies[0]?.content).toMatch(/Now playing:/i);
+  });
+
+  it('/playlist expands a watch?v=…&list=… link fully and reports skipped/capped', async () => {
+    harness.resolvePlaylist.mockResolvedValue({
+      tracks: [fakeTrack('a'), fakeTrack('b'), fakeTrack('c')],
+      total: 5,
+      skipped: 1,
+    });
+    const ctx = await run(harness, 'playlist', {
+      url: 'https://www.youtube.com/watch?v=abc&list=PL123',
+    });
+    expect(harness.resolvePlaylist).toHaveBeenCalledOnce();
+    expect(ctx.replies[0]?.content).toMatch(/Added \*\*3\*\* of 5/);
+    expect(ctx.replies[0]?.content).toMatch(/1 unavailable/);
+    expect(ctx.replies[0]?.content).toMatch(/1 over the 100-track limit/);
+  });
+
+  it('/playlist rejects a link with no playlist', async () => {
+    const ctx = await run(harness, 'playlist', { url: 'https://www.youtube.com/watch?v=abc' });
+    expect(ctx.replies[0]).toMatchObject({ ephemeral: true });
+    expect(harness.resolvePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('reports an empty playlist', async () => {
+    harness.resolvePlaylist.mockResolvedValue({ tracks: [], total: 0, skipped: 0 });
+    const ctx = await run(harness, 'play', {
+      url: 'https://www.youtube.com/playlist?list=PLempty',
+    });
+    expect(ctx.replies[0]?.content).toMatch(/empty/i);
   });
 });
 

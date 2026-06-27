@@ -12,9 +12,32 @@ import { UserFacingError } from '@botplatform/shared';
  * its player code. The binary ships in the Docker images — nothing is
  * installed on the host.
  */
+/** A single flat-playlist entry (no per-item extraction was performed). */
+export interface FlatPlaylistEntry {
+  id?: string;
+  title?: string;
+  /** Often a full URL, but some extractors emit a bare video id here. */
+  url?: string;
+  webpage_url?: string;
+  duration?: number;
+  ie_key?: string;
+  availability?: string;
+  live_status?: string;
+}
+
+export interface FlatPlaylist {
+  title?: string;
+  entries: FlatPlaylistEntry[];
+}
+
 export interface YtDlpRunner {
   /** Run yt-dlp with `-J` style args and parse the JSON output. */
   json(args: string[], timeoutMs: number): Promise<unknown>;
+  /**
+   * Flat-list a playlist's entries WITHOUT fetching each item's full metadata
+   * (cheap, scales to large playlists). Overrides the global `--no-playlist`.
+   */
+  flatPlaylist(url: string, timeoutMs: number): Promise<FlatPlaylist>;
   /** Spawn yt-dlp streaming media to stdout; killing the stream kills the process. */
   stream(args: string[]): Readable;
   /** One-shot availability probe (binary present and runnable). */
@@ -25,6 +48,20 @@ const MAX_JSON_BYTES = 20 * 1024 * 1024; // playlists can be large; cap hard
 
 /** Flags applied to every invocation: quiet, no playlists, no surprises. */
 const COMMON_ARGS = ['--no-playlist', '--no-warnings', '--no-progress', '--no-cache-dir'];
+
+/**
+ * Extra resilience for the streaming path only (not metadata). Long, multi-hour
+ * downloads must survive transient network hiccups; retries are FINITE so a
+ * genuinely dead source still terminates instead of hanging forever.
+ */
+const STREAM_ROBUSTNESS_ARGS = [
+  '--retries',
+  '10',
+  '--fragment-retries',
+  '10',
+  '--retry-sleep',
+  '3',
+];
 
 export interface YtDlpRunnerOptions {
   /**
@@ -78,8 +115,44 @@ export function createExecYtDlpRunner(
       });
     },
 
+    flatPlaylist(url: string, timeoutMs: number): Promise<FlatPlaylist> {
+      return new Promise((resolve, reject) => {
+        execFile(
+          binaryPath,
+          // `--yes-playlist` overrides the `--no-playlist` in baseArgs (last
+          // flag wins); `--flat-playlist` avoids per-item extraction.
+          [...baseArgs, '--yes-playlist', '--flat-playlist', '-J', '--', url],
+          { timeout: timeoutMs, maxBuffer: MAX_JSON_BYTES, windowsHide: true },
+          (error, stdout, stderr) => {
+            if (error) {
+              logger.warn(
+                { err: error, stderr: truncate(stderr, 400) },
+                'yt-dlp playlist extraction failed'
+              );
+              reject(
+                new UserFacingError('AUDIO_RESOLVE_FAILED', 'That playlist could not be resolved.', {
+                  cause: error,
+                })
+              );
+              return;
+            }
+            try {
+              const parsed = JSON.parse(stdout) as Partial<FlatPlaylist>;
+              resolve({ title: parsed.title, entries: parsed.entries ?? [] });
+            } catch (parseError) {
+              reject(
+                new UserFacingError('AUDIO_RESOLVE_FAILED', 'That playlist could not be resolved.', {
+                  cause: parseError,
+                })
+              );
+            }
+          }
+        );
+      });
+    },
+
     stream(args: string[]): Readable {
-      const child = spawn(binaryPath, [...baseArgs, ...args], {
+      const child = spawn(binaryPath, [...baseArgs, ...STREAM_ROBUSTNESS_ARGS, ...args], {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });

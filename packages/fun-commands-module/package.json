@@ -1,0 +1,21 @@
+{
+  "name": "@botplatform/fun-commands-module",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@botplatform/core": "workspace:*",
+    "@botplatform/logger": "workspace:*",
+    "@botplatform/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
