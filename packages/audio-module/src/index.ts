@@ -1,11 +1,12 @@
 import type { AppConfig } from '@botplatform/config';
-import type { BotModule, ComponentInteractionEvent } from '@botplatform/core';
+import type { BotModule, ComponentInteractionEvent, GuildServiceProvider } from '@botplatform/core';
 import type { PlaybackRepo } from '@botplatform/database';
 import type { Logger } from '@botplatform/logger';
 import type { InternalActionResult, QueueSnapshot } from '@botplatform/shared';
 import { MODULE_KEYS } from '@botplatform/shared';
 import { buildAudioCommands, buildAudioComponentHandler } from './commands.js';
 import { PlayerManager } from './engine/manager.js';
+import { buildMixComponentHandler } from './mix-panel.js';
 import { buildRadioCommand, buildRadioComponentHandler } from './radio/commands.js';
 import { RadioRegistry } from './radio/registry.js';
 import { DirectHttpAudioProvider } from './resolver/providers/direct-http.js';
@@ -20,6 +21,11 @@ export interface AudioModuleOptions {
   logger: Logger;
   /** Null disables persistence (history/queue mirror) — test convenience. */
   playback: PlaybackRepo | null;
+  /**
+   * Optional: lets the bot (re)post the now-playing panel to the text channel
+   * each time a new track starts. Omit (e.g. command registration) to disable.
+   */
+  guildServiceProvider?: GuildServiceProvider | null;
 }
 
 export interface AudioModuleHandle {
@@ -56,7 +62,8 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
       maxTrackDurationSeconds: options.config.audio.maxTrackDurationSeconds,
     },
     options.playback,
-    logger
+    logger,
+    options.guildServiceProvider ?? null
   );
 
   const resolveCtx = {
@@ -71,6 +78,7 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
     registry: radioRegistry,
     resolveCtx,
   });
+  const mixComponentHandler = buildMixComponentHandler(manager);
 
   const module: BotModule = {
     key: MODULE_KEYS.audioPlayer,
@@ -82,17 +90,20 @@ export function createAudioModule(options: AudioModuleOptions): AudioModuleHandl
         resolver,
         resolveCtx,
         maxPlaylistItems: options.config.audio.maxPlaylistItems,
+        mixDefaultItems: options.config.audio.mixDefaultItems,
       }),
       buildRadioCommand({ manager, registry: radioRegistry, resolveCtx }),
     ],
-    // The now-playing panel buttons (audio:) and the radio station select menu
-    // (radio:) both route here; each handler ignores customIds it doesn't own.
+    // The now-playing buttons (audio:), the radio station select menu (radio:)
+    // and the mix "add more" buttons (mix:) all route here; each handler ignores
+    // customIds it doesn't own.
     events: [
       {
         type: 'component.interaction',
         handle: async (event: ComponentInteractionEvent) => {
           await audioComponentHandler(event);
           await radioComponentHandler(event);
+          await mixComponentHandler(event);
         },
       },
     ],
@@ -148,8 +159,15 @@ export {
   AUDIO_BUTTON_PREFIX,
 } from './now-playing.js';
 export { buildAudioComponentHandler } from './commands.js';
-export { classifyYouTubeUrl } from './resolver/youtube-url.js';
+export { classifyYouTubeUrl, isMixList } from './resolver/youtube-url.js';
 export type { YouTubeUrlKind, YouTubeUrlInfo } from './resolver/youtube-url.js';
+export {
+  buildMixPanel,
+  buildMixComponentHandler,
+  mixButtonId,
+  parseMixButton,
+  MIX_BUTTON_PREFIX,
+} from './mix-panel.js';
 export { RadioRegistry, isValidStreamUrl } from './radio/registry.js';
 export { RADIO_STATIONS } from './radio/stations.js';
 export type { RadioStation } from './radio/stations.js';

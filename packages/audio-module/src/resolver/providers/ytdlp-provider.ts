@@ -97,7 +97,7 @@ export class YtDlpAudioProvider implements AudioProvider {
     ctx: ResolveContext,
     limit: number
   ): Promise<PlaylistResolution> {
-    const playlist = await this.runner.flatPlaylist(rawUrl, ctx.timeoutMs);
+    const playlist = await this.runner.flatPlaylist(rawUrl, ctx.timeoutMs, limit);
     const entries = playlist.entries ?? [];
     const max = this.options.maxTrackDurationSeconds;
     const tracks: ResolvedTrack[] = [];

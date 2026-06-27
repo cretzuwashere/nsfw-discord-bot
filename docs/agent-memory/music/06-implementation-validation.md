@@ -144,3 +144,125 @@ YouTube playlist, not just the one video.
 2 tests: video-in-playlist loads the rest + dedupes the chosen video; and the
 best-effort fallback still plays the video when expansion fails); `pnpm lint`
 → clean. Not validated: real Discord/YouTube (same external caveats as above).
+
+---
+
+## Addendum 2 — YouTube Mixes/Radios (`list=RD…`) now expand (2026-06-27, follow-up)
+
+User report: `https://www.youtube.com/watch?v=VLKqKUJSCv4&list=RDVLKqKUJSCv4`
+added only the first song. Root cause: `classifyYouTubeUrl` downgraded any
+`list=RD…` (auto-mix) to a plain `video`, so `/play` never expanded it.
+
+**Empirically verified against the live binary (yt-dlp 2026.06.09, in-container):**
+- `--no-playlist --yes-playlist --flat-playlist -J` on the URL → expands the Mix
+  (confirms `--yes-playlist` overrides `--no-playlist`, last-flag-wins). A Mix is
+  large/dynamic: returned **423–1276** entries across runs.
+- `--no-playlist` alone → exactly **1** entry (the symptom).
+- `--playlist-end 10` → exactly **10** entries in **1.07s** (bounding works + fast).
+- Full module flow (`AudioResolver.resolvePlaylist`, real runner, real URL, cap
+  25) → classified `video-in-playlist`, returned **25 tracks in 1.96s**, title
+  "Mix - Neo - Don't Break".
+
+**Change:**
+- `youtube-url.ts` — removed the `isAutoMix` downgrade; any `list=` (incl.
+  `RD…`/`OLAK…`) classifies as `playlist`/`video-in-playlist`.
+- `ytdlp-runner.ts` — `flatPlaylist(url, timeoutMs, limit?)` adds
+  `--playlist-end <limit>` so endless Mixes can't return 1000+ entries or blow
+  the 15s metadata timeout (this is what makes the fix reliable, not just the
+  classification change).
+- `ytdlp-provider.ts` — `resolvePlaylist` forwards the cap to `flatPlaylist`.
+
+**Validated:** typecheck clean; audio-module unit **123 passed** (+2: RD→
+video-in-playlist, OLAK→playlist, and the `--playlist-end` forwarding test);
+`pnpm lint` clean; `pnpm test:unit` **474 passed**; `pnpm build` OK; and the real
+end-to-end run above. Docs updated: `youtube-playlists.md`, `commands.md`,
+`troubleshooting-music.md`, `testing-music.md`.
+
+Not validated: live Discord voice playback of the queued mix (needs a real bot +
+voice). The resolution/expansion path itself is now proven against real YouTube.
+
+---
+
+## Addendum 4 — Looping + auto-reposted now-playing panel + adversarial review (2026-06-27)
+
+User request: (1) loop a track OR the queue, N times or forever; (2) re-post the
+`/controls` panel on every track change (show current track + remaining queue).
+
+**Feature.**
+- **Loop** (`engine/session.ts`): `loopMode` (off/track/queue), `loopRemaining`
+  (null=forever), `loopSet` (queue captured at enable). Track loop replays the
+  same track; queue loop refills the captured set when the queue drains, counting
+  passes. `/loop track|queue|off [times]` subcommands (`commands.ts`). Loop shown
+  on the panel (`now-playing.ts`) + `QueueSnapshot.loop` (`shared/types.ts`).
+- **Auto-panel** (`engine/manager.ts`): the manager holds a
+  `GuildServiceProvider` (passed from `apps/bot/src/main.ts`) and, on each track
+  CHANGE (not the initial /play), deletes the previous now-playing panel and
+  posts a fresh one to the session's text channel (`session.setTextChannel`).
+
+**Adversarial review** (workflow `wf_5e1b4df9-1f1`, 5 dimensions; wiring clean;
+2 false alarms rejected). 9 confirmed, all addressed:
+1. (high) `/skip` transferred a track loop to the next song → `skip()` now
+   `resetLoop()` for track loops.
+2. (high) concurrent panel reposts orphaned panels → reposts now **serialized
+   per guild** via a promise chain.
+3. (high) external disconnect resurfaced stale loop on reuse → `attachVoice`
+   resets loop/mix when the prior connection was destroyed. (The broader
+   session/lastPanel leak on external disconnect is pre-existing — documented in
+   `01-current-music-system-analysis.md`; the lastPanel part self-heals on the
+   next play.)
+4. (high) in-flight repost could resurrect a panel after `/leave` → `repostPanel`
+   re-checks `sessions.has` after send and deletes the orphan.
+5/6. (high/med) queue loop snapshots the set at enable; later adds don't repeat →
+   the `/loop queue` reply now says so (kept the snapshot model deliberately).
+7. (low) track loop re-posted the panel every repeat → track-loop replay no
+   longer announces.
+8. (low) `/stop` left a stale panel → `stop()` refreshes the panel to idle.
+9. (low) the initial `/play` reply panel lingers one cycle → documented.
+
+**Validated:** typecheck clean; audio-module unit **165**; `pnpm test:unit`
+**516**; lint clean; build OK. Docs: `looping-and-now-playing.md` (new),
+`commands.md`. Not validated: live Discord voice (needs a running bot).
+
+---
+
+## Addendum 3 — Mix "default 10 + add-more buttons" + adversarial review (2026-06-27)
+
+User request: for `list=RD…` links, queue **10 by default** (not 100) and show a
+react-button panel to optionally add more/fewer.
+
+**Feature.** New config `MIX_DEFAULT_ITEMS` (default 10, max 50). `isMixList()`
+(`youtube-url.ts`) detects `RD…`. `playMix()` (`commands.ts`) plays the seed,
+queues `mixDefaultItems`, buffers the rest (up to `MIX_BUFFER_MAX`=50, fetched
+with `--playlist-end`), and posts the mix panel (`mix-panel.ts`
+`buildMixPanel`). Buttons (`mix:` prefix): `+5/+10/+25`, `Add all`, `−5`
+(remove), `Clear queue`. Buffer state is `session.pendingMix`
+(`setPendingMix`/`addFromPendingMix`/`removeFromQueue`/`clearPendingMix`), with a
+synchronous slice/enqueue/splice critical section (race-free under concurrent
+clicks). `/mix` re-summons the panel. Component dispatch composes
+audio→radio→mix by customId prefix.
+
+**Real end-to-end proof** (user's URL, in-container): classified
+`video-in-playlist`+`isMix`, fetched 50 → seed filtered → **queued 10, buffered
+39**.
+
+**Adversarial review** (5-dimension fan-out + per-finding verification, workflow
+`wf_d8d19a4c-b17`): 7 confirmed, several false alarms correctly rejected
+(fabricated "more or fewer" requirement; "clear removes non-mix tracks"; a
+self-refuting concurrency claim). **All 7 fixed:**
+1. (high) add-more reported "no buffer" when the real blocker was a full queue →
+   now distinguishes "queue full (max N)" from "no more buffered".
+2. (high) `/playlist` bulk-loaded RD mixes → now routes RD to the mix panel too.
+3. (med) stale `pendingMix` survived a later non-mix `/play` → `/play` &
+   `/playlist` `clearPendingMix()` up front (playMix re-sets).
+4. (med) panel couldn't be re-summoned → added `/mix`.
+5. (low) "Add more — or fewer" had no "fewer" control → added the `−5` remove
+   button (`removeFromQueue`/`queue.removeTail`).
+6. (low) stale Add buttons after `/stop` until clicked → documented as
+   self-healing (no `disabled` in the message contract; not worth a core change).
+7. (low) `MIX_DEFAULT_ITEMS` could exceed the 50-fetch buffer → capped zod at 50
+   and made the fetch `max(MIX_BUFFER_MAX, mixDefaultItems+15)`.
+
+**Validated:** typecheck clean; audio-module+config unit **153 passed**;
+`pnpm test:unit` **497 passed**; `pnpm lint` clean; `pnpm build` OK; wiring smoke
+(13 commands incl. `mix`). Docs updated: `youtube-playlists.md`, `commands.md`,
+`testing-music.md`, `troubleshooting-music.md`.

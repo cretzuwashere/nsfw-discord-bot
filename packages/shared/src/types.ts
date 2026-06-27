@@ -49,6 +49,8 @@ export interface QueueSnapshot {
   maxQueueSize: number;
   /** Seconds elapsed in the current track (pause-aware), when playing. */
   elapsedSeconds?: number | undefined;
+  /** Active loop state; absent when not looping. `remaining` null = forever. */
+  loop?: { mode: 'track' | 'queue'; remaining: number | null } | undefined;
 }
 
 export type AdapterConnectionState = 'disabled' | 'connecting' | 'connected' | 'disconnected' | 'error';

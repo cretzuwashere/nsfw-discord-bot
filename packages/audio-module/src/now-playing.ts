@@ -80,6 +80,11 @@ export function buildNowPlayingPanel(snapshot: QueueSnapshot | undefined): Outgo
     { name: 'Source', value: track.provider, inline: true },
     { name: 'Requested by', value: track.requestedBy || 'someone', inline: true },
   ];
+  if (snapshot.loop) {
+    const scope = snapshot.loop.mode === 'track' ? 'Track' : 'Queue';
+    const count = snapshot.loop.remaining === null ? 'forever' : `${snapshot.loop.remaining} left`;
+    fields.push({ name: 'Loop', value: `🔁 ${scope} · ${count}`, inline: true });
+  }
   if (snapshot.queue.length > 0) {
     const upcoming = snapshot.queue
       .slice(0, 3)

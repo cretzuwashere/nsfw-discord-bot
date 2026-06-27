@@ -13,6 +13,10 @@ export interface SessionLimits {
 
 export type PauseResult = 'paused' | 'already-paused' | 'not-playing';
 export type ResumeResult = 'resumed' | 'not-paused';
+export type LoopMode = 'off' | 'track' | 'queue';
+
+/** Posts/refreshes the now-playing panel in a text channel on track changes. */
+export type NowPlayingAnnouncer = (channelId: string, snapshot: QueueSnapshot) => void;
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 
@@ -32,6 +36,18 @@ export class GuildPlaybackSession {
   /** Elapsed-time tracking for the now-playing panel (pause-aware). */
   private elapsedBeforePauseMs = 0;
   private playingSinceMs: number | null = null;
+  /**
+   * Buffered, not-yet-queued tracks from a YouTube Mix/Radio. The user pulls
+   * more from here via the mix panel buttons. Null when there is no active mix.
+   */
+  private pendingMix: { tracks: ResolvedTrack[]; title: string } | null = null;
+  /** Loop state. `loopRemaining` null = forever; for 'queue', `loopSet` is the
+   * track list captured when looping was enabled (re-queued each pass). */
+  private loopMode: LoopMode = 'off';
+  private loopRemaining: number | null = null;
+  private loopSet: ResolvedTrack[] = [];
+  /** Text channel where the now-playing panel is (re)posted on track changes. */
+  private textChannelId: string | undefined;
 
   /** Whole seconds elapsed in the current track, accounting for pauses. */
   getElapsedSeconds(): number {
@@ -46,9 +62,51 @@ export class GuildPlaybackSession {
     private voiceRef: VoiceSession,
     private readonly limits: SessionLimits,
     private readonly playback: PlaybackRepo | null,
-    private readonly logger: Logger
+    private readonly logger: Logger,
+    /** Optional: posts the now-playing panel to the text channel on changes. */
+    private readonly announcer?: NowPlayingAnnouncer
   ) {
     this.queue = new PlaybackQueue(limits.maxQueueSize);
+  }
+
+  /** Remember the text channel to (re)post the now-playing panel in. */
+  setTextChannel(channelId: string | undefined): void {
+    if (channelId) this.textChannelId = channelId;
+  }
+
+  /**
+   * Configure looping. `track` repeats the current song; `queue` repeats the
+   * whole queue (captured now). `times` = number of repeats (null = forever).
+   */
+  setLoop(mode: LoopMode, times: number | null): void {
+    this.loopMode = mode;
+    this.loopRemaining = mode === 'off' ? null : times;
+    if (mode === 'queue') {
+      const upcoming = this.queue.peekAll();
+      this.loopSet = this.nowPlaying ? [this.nowPlaying, ...upcoming] : [...upcoming];
+    } else {
+      this.loopSet = [];
+    }
+  }
+
+  getLoop(): { mode: LoopMode; remaining: number | null } {
+    return { mode: this.loopMode, remaining: this.loopRemaining };
+  }
+
+  private resetLoop(): void {
+    this.loopMode = 'off';
+    this.loopRemaining = null;
+    this.loopSet = [];
+  }
+
+  /** Re-queue the captured loop set when the queue has drained (queue loop). */
+  private refillQueueIfLooping(): void {
+    if (this.queue.size > 0) return;
+    if (this.loopMode !== 'queue' || this.loopSet.length === 0) return;
+    if (this.loopRemaining !== null && this.loopRemaining <= 0) return;
+    if (this.loopRemaining !== null) this.loopRemaining -= 1;
+    for (const track of this.loopSet) this.queue.enqueue(track);
+    this.persistQueue();
   }
 
   get voice(): VoiceSession {
@@ -57,6 +115,13 @@ export class GuildPlaybackSession {
 
   /** Swap the underlying voice connection (e.g. after moving channels). */
   attachVoice(voice: VoiceSession): void {
+    // A reconnect after the previous connection was destroyed (e.g. the bot was
+    // disconnected externally) breaks the playback context — drop stale loop/mix
+    // state so it can't resurface and re-queue tracks on the new connection.
+    if (this.voiceRef.destroyed) {
+      this.resetLoop();
+      this.pendingMix = null;
+    }
     this.voiceRef = voice;
   }
 
@@ -100,11 +165,59 @@ export class GuildPlaybackSession {
           startedPlaying = true;
         } catch {
           // playNow recorded the failure; try to keep going with the rest.
-          void this.advance();
+          void this.advance(true);
         }
       }
     }
     return { startedPlaying, accepted, rejected };
+  }
+
+  /** Buffer extra Mix/Radio tracks the user can pull in later via buttons. */
+  setPendingMix(tracks: readonly ResolvedTrack[], title: string): void {
+    this.pendingMix = tracks.length > 0 ? { tracks: [...tracks], title } : null;
+  }
+
+  get pendingMixCount(): number {
+    return this.pendingMix?.tracks.length ?? 0;
+  }
+
+  get pendingMixTitle(): string | undefined {
+    return this.pendingMix?.title;
+  }
+
+  clearPendingMix(): void {
+    this.pendingMix = null;
+  }
+
+  /** Remove up to `n` of the most-recently-queued (tail) upcoming tracks. */
+  removeFromQueue(n: number): number {
+    const removed = this.queue.removeTail(n);
+    if (removed > 0) this.persistQueue();
+    return removed;
+  }
+
+  /**
+   * Move up to `n` buffered mix tracks into the queue. The slice/enqueue/splice
+   * is synchronous (no await between) so concurrent button clicks can't double-
+   * queue the same tracks. Only what the bounded queue actually accepted is
+   * removed from the buffer.
+   */
+  addFromPendingMix(n: number): { added: number; remaining: number } {
+    if (!this.pendingMix) return { added: 0, remaining: 0 };
+    const take = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : this.pendingMix.tracks.length;
+    const batch = this.pendingMix.tracks.slice(0, take);
+    const { accepted } = this.queue.enqueueMany(batch);
+    this.pendingMix.tracks.splice(0, accepted);
+    this.persistQueue();
+    // If nothing is playing (e.g. the mix seed already ended), kick playback off.
+    if (!this.nowPlaying && this.queue.size > 0) {
+      const first = this.queue.dequeue();
+      this.persistQueue();
+      if (first) void this.playNow(first, true).catch(() => void this.advance(true));
+    }
+    const remaining = this.pendingMix?.tracks.length ?? 0;
+    if (remaining === 0) this.pendingMix = null;
+    return { added: accepted, remaining };
   }
 
   /** Skip the current track; starts the next one when available. */
@@ -114,17 +227,21 @@ export class GuildPlaybackSession {
     this.finishHistory('skipped');
     this.beginIntentionalStop();
     this.nowPlaying = null;
+    // A skip means "stop repeating THIS track" — it must not transfer a track
+    // loop onto the next song (or leak onto a future /play).
+    if (this.loopMode === 'track') this.resetLoop();
 
+    if (this.queue.size === 0) this.refillQueueIfLooping();
     const next = this.queue.dequeue();
     this.persistQueue();
     if (!next) return { hadTrack: true, next: null };
 
     try {
-      await this.playNow(next);
+      await this.playNow(next, true);
       return { hadTrack: true, next: next.metadata };
     } catch {
       // playNow recorded the failure; try to keep going.
-      void this.advance();
+      void this.advance(true);
       return { hadTrack: true, next: next.metadata };
     }
   }
@@ -140,6 +257,11 @@ export class GuildPlaybackSession {
     const clearedCount = this.queue.clear();
     this.persistQueue();
     this.consecutiveFailures = 0;
+    this.pendingMix = null;
+    this.resetLoop();
+    // Refresh the auto-posted panel to the idle state so it doesn't keep showing
+    // the stopped track with live-looking controls.
+    if (stoppedTrack) this.announceNowPlaying();
     return { stoppedTrack, clearedCount };
   }
 
@@ -147,6 +269,8 @@ export class GuildPlaybackSession {
   clearQueue(): number {
     const cleared = this.queue.clear();
     this.persistQueue();
+    // A queue loop has nothing left to repeat once the queue is cleared.
+    if (this.loopMode === 'queue') this.resetLoop();
     return cleared;
   }
 
@@ -178,12 +302,18 @@ export class GuildPlaybackSession {
       queue: this.queue.peekAll().map((item) => item.metadata),
       maxQueueSize: this.limits.maxQueueSize,
       elapsedSeconds: this.nowPlaying ? this.getElapsedSeconds() : undefined,
+      loop:
+        this.loopMode === 'off'
+          ? undefined
+          : { mode: this.loopMode, remaining: this.loopRemaining },
     };
   }
 
   /** Stop everything and release the voice connection. */
   async destroy(): Promise<void> {
     this.clearDurationTimer();
+    this.pendingMix = null;
+    this.resetLoop();
     if (this.nowPlaying) {
       this.finishHistory('stopped');
       this.beginIntentionalStop();
@@ -203,7 +333,7 @@ export class GuildPlaybackSession {
 
   // -------------------------------------------------------------------------
 
-  private async playNow(track: ResolvedTrack): Promise<void> {
+  private async playNow(track: ResolvedTrack, announce = false): Promise<void> {
     this.nowPlaying = track;
     this.historyId = -1;
     if (this.playback) {
@@ -224,11 +354,23 @@ export class GuildPlaybackSession {
       this.elapsedBeforePauseMs = 0;
       this.playingSinceMs = Date.now();
       this.armDurationTimer();
+      // On a track CHANGE (not the initial /play, which replies with the panel),
+      // (re)post the now-playing panel so the channel shows the current song.
+      if (announce) this.announceNowPlaying();
     } catch (error) {
       this.finishHistory('failed', safeErrorSummary(error));
       this.nowPlaying = null;
       this.consecutiveFailures++;
       throw error;
+    }
+  }
+
+  private announceNowPlaying(): void {
+    if (!this.announcer || !this.textChannelId) return;
+    try {
+      this.announcer(this.textChannelId, this.getSnapshot());
+    } catch (error) {
+      this.logger.warn({ err: error }, 'now-playing announce failed');
     }
   }
 
@@ -245,8 +387,20 @@ export class GuildPlaybackSession {
     if (event.type === 'finished') {
       this.finishHistory('completed');
       this.consecutiveFailures = 0;
+      const finished = this.nowPlaying;
       this.nowPlaying = null;
-      void this.advance();
+
+      // Track loop: replay the same track until the repeat count runs out.
+      if (this.loopMode === 'track' && finished) {
+        if (this.loopRemaining === null || this.loopRemaining > 0) {
+          if (this.loopRemaining !== null) this.loopRemaining -= 1;
+          // Same track repeating — don't re-post the (unchanged) panel each loop.
+          void this.playNow(finished, false).catch(() => void this.advance(true));
+          return;
+        }
+        this.resetLoop(); // replays exhausted
+      }
+      void this.advance(true);
       return;
     }
 
@@ -264,22 +418,23 @@ export class GuildPlaybackSession {
       this.persistQueue();
       return;
     }
-    void this.advance();
+    void this.advance(true);
   }
 
-  private async advance(): Promise<void> {
+  private async advance(announce = false): Promise<void> {
     if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
       this.queue.clear();
       this.persistQueue();
       return;
     }
+    if (this.queue.size === 0) this.refillQueueIfLooping();
     const next = this.queue.dequeue();
     this.persistQueue();
     if (!next) return;
     try {
-      await this.playNow(next);
+      await this.playNow(next, announce);
     } catch {
-      await this.advance();
+      await this.advance(announce);
     }
   }
 

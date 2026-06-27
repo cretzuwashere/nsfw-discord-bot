@@ -30,9 +30,15 @@ Verify the live chain with the smoke script (see
   background expansion a moment, then check `/queue`. If only the one video ever
   shows up, the playlist lookup failed (see the yt-dlp note above) — the chosen
   video still plays. Use `/playlist <link>` to load the whole list from the top.
-- **`RD…` auto-mix.** A `list=RD…` (or `UL…`, `RDMM…`, `RDCLAK…`, `RDEM…`)
-  auto-mix is endless and per-viewer, so it is treated as a **single** video by
-  design — it never expands (`youtube-url.ts`).
+- **`RD…` Mix/Radio.** A `list=RD…` Mix plays the seed and queues
+  `MIX_DEFAULT_ITEMS` (default **10**) tracks, then shows a panel with buttons to
+  add more. It deliberately does **not** bulk-load the whole (endless) mix.
+  - *Only got 1 track / no panel?* The mix lookup timed out or failed (see the
+    yt-dlp note above) — the seed still plays, but there was nothing to buffer.
+  - *Want more than 10 by default?* Raise `MIX_DEFAULT_ITEMS`, or just click the
+    `+5/+10/+25/Add all` buttons. *Want fewer?* Click `🗑️ Clear queue`.
+  - The buffer is bounded (50 fetched) and the queue bound (`MAX_QUEUE_SIZE`)
+    still applies, so "Add all" can't overflow the queue.
 - **Non-YouTube playlist.** Playlist expansion is YouTube-only (the resolver
   routes to the first provider that implements `resolvePlaylist`). A Spotify or
   other playlist/album link returns "Playlists are only supported for YouTube

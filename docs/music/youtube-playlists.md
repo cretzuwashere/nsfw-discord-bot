@@ -20,11 +20,23 @@ branches into single / playlist / video-in-playlist; `/playlist` checks it too
 | `youtube.com/watch?v=ID` or `youtu.be/ID` | `video` | Plays that one video. | Rejected — "That link has no playlist." |
 | `youtube.com/playlist?list=PL…` (pure playlist) | `playlist` | **Expands the whole playlist.** | **Expands the whole playlist.** |
 | `youtube.com/watch?v=ID&list=PL…` (video opened inside a playlist) | `video-in-playlist` | **Plays the chosen video, then loads the rest of the playlist** behind it. | **Expands the whole playlist from the top.** |
-| An auto-generated mix/radio (`list=RD…`, `UL…`, `RDMM…`, `RDCLAK…`, `RDEM…`) | `video` | Plays the single video; the endless mix is **not** expanded. | Rejected — auto-mixes are treated as a single video. |
+| A YouTube **Mix / Radio** (`list=RD…`, `RDMM…`, `RDCLAK…`) | `video-in-playlist` (or `playlist`) | **Plays the seed, queues `MIX_DEFAULT_ITEMS` (default 10), and shows a panel with buttons to add more.** | Same panel path. |
+| An album list (`list=OLAK…`) | `playlist` / `video-in-playlist` | Treated as a normal playlist (not a Mix). | Expands from the top. |
 | Free text (a song name) | — | **Not supported** — fails URL validation with the "not a valid link" error. There is no text search. | Same. |
 
-Auto-mix detection: `isAutoMix()` (`youtube-url.ts`) strips
-`RD/UL/RDMM/RDCLAK/RDEM` `list=` values so they classify as a plain video.
+**YouTube Mixes / Radios (`list=RD…`) — default 10 + "add more" buttons.** A Mix
+is auto-generated and effectively endless (yt-dlp can report 1000+ entries), so
+`/play` does NOT bulk-load it. Instead it:
+
+1. plays the seed video right away (if the link has one);
+2. queues **`MIX_DEFAULT_ITEMS`** tracks from the mix (env, default **10**);
+3. buffers the next several (up to 50 fetched) and posts a **mix panel** with
+   react-style buttons so the user can pull more **only if they want**.
+
+The extraction is bounded with `--playlist-end` so a Mix can never flood the
+queue or blow the metadata timeout. See [Mix panel & buttons](#mix-panel--buttons)
+below. Detection is `isMixList()` (`list` starts with `RD`); everything else
+(`PL…`, `OLAK…`) stays a normal playlist.
 
 **Video-in-playlist (`/play`)** — when you paste a link that *contains* a
 playlist (a video opened from inside one), `/play` first plays the chosen video
@@ -52,6 +64,34 @@ All applicable parts are shown, joined by ` · `:
 - `J over the 100-track limit` — playable entries beyond `MAX_PLAYLIST_ITEMS`.
 - `L didn't fit the queue` — entries dropped because `MAX_QUEUE_SIZE` was hit
   mid-expansion.
+
+## Mix panel & buttons
+
+When you `/play` a Mix (`list=RD…`), instead of the one-line summary you get an
+embed panel (`mix-panel.ts` → `buildMixPanel`) with react-style buttons — the
+same component mechanism as the now-playing `/controls`:
+
+| Button | customId | Action |
+|---|---|---|
+| `➕ +5` / `+10` / `+25` | `mix:add:5` / `:10` / `:25` | Queue that many **more** from the buffered mix. |
+| `Add all (N)` | `mix:add:all` | Queue all `N` remaining buffered tracks (bounded by `MAX_QUEUE_SIZE`). |
+| `➖ −5` | `mix:remove:5` | **Fewer** — drop the last 5 upcoming tracks (shown only when something is queued). |
+| `🗑️ Clear queue` | `mix:clear` | Empty the upcoming queue and drop the mix buffer. |
+
+The buffer lives on the guild's playback session (`session.ts` `pendingMix`).
+Clicking **Add** moves tracks from the buffer into the queue; only what the
+bounded queue accepts is removed from the buffer, so nothing is lost. If the
+queue is full, the panel says so (rather than mis-reporting an empty buffer).
+When the buffer is empty the **Add** buttons disappear; **−5** appears only while
+the queue has upcoming tracks. The panel refreshes in place after each click.
+
+**Re-open the panel with `/mix`** — if the original message scrolls away, `/mix`
+re-renders it from the buffered state (or tells you there's no active mix). The
+buffer is cleared by `/stop`, `/leave` (destroy), **Clear queue**, or starting a
+fresh `/play`/`/playlist`. The mix buttons are routed by the `mix:` customId
+prefix and ignored by the audio/radio handlers. (Note: after `/stop`, an old
+panel still on screen shows stale Add buttons until clicked — one click
+self-corrects it, since the contract has no way to disable buttons remotely.)
 
 If nothing was playing, the first track starts immediately and the reply adds
 `▶️ Now playing the first track — use /queue to see what's next.`

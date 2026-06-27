@@ -36,8 +36,11 @@ export interface YtDlpRunner {
   /**
    * Flat-list a playlist's entries WITHOUT fetching each item's full metadata
    * (cheap, scales to large playlists). Overrides the global `--no-playlist`.
+   * `limit` caps how many entries yt-dlp extracts (`--playlist-end`) — essential
+   * for endless YouTube Mixes (`list=RD…`) which otherwise return 1000+ entries
+   * and can blow the metadata timeout.
    */
-  flatPlaylist(url: string, timeoutMs: number): Promise<FlatPlaylist>;
+  flatPlaylist(url: string, timeoutMs: number, limit?: number): Promise<FlatPlaylist>;
   /** Spawn yt-dlp streaming media to stdout; killing the stream kills the process. */
   stream(args: string[]): Readable;
   /** One-shot availability probe (binary present and runnable). */
@@ -115,13 +118,16 @@ export function createExecYtDlpRunner(
       });
     },
 
-    flatPlaylist(url: string, timeoutMs: number): Promise<FlatPlaylist> {
+    flatPlaylist(url: string, timeoutMs: number, limit?: number): Promise<FlatPlaylist> {
+      // `--playlist-end N` stops extraction after N entries (1-indexed) so an
+      // endless Mix doesn't pull thousands of items or time out.
+      const limitArgs = limit && limit > 0 ? ['--playlist-end', String(limit)] : [];
       return new Promise((resolve, reject) => {
         execFile(
           binaryPath,
           // `--yes-playlist` overrides the `--no-playlist` in baseArgs (last
           // flag wins); `--flat-playlist` avoids per-item extraction.
-          [...baseArgs, '--yes-playlist', '--flat-playlist', '-J', '--', url],
+          [...baseArgs, '--yes-playlist', '--flat-playlist', ...limitArgs, '-J', '--', url],
           { timeout: timeoutMs, maxBuffer: MAX_JSON_BYTES, windowsHide: true },
           (error, stdout, stderr) => {
             if (error) {

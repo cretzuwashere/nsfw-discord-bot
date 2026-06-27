@@ -7,10 +7,11 @@ import type {
 import { formatDuration, truncate, UserFacingError, type InternalActionResult } from '@botplatform/shared';
 import type { PlayerManager } from './engine/manager.js';
 import type { GuildPlaybackSession } from './engine/session.js';
+import { buildMixPanel } from './mix-panel.js';
 import { buildNowPlayingPanel, parseAudioButton } from './now-playing.js';
 import type { AudioResolver } from './resolver/resolver.js';
-import type { ResolveContext } from './resolver/types.js';
-import { classifyYouTubeUrl, type YouTubeUrlInfo } from './resolver/youtube-url.js';
+import type { ResolveContext, ResolvedTrack } from './resolver/types.js';
+import { classifyYouTubeUrl, isMixList, type YouTubeUrlInfo } from './resolver/youtube-url.js';
 
 export interface CommandDeps {
   manager: PlayerManager;
@@ -18,7 +19,12 @@ export interface CommandDeps {
   resolveCtx: ResolveContext;
   /** Max items pulled from a single YouTube playlist. */
   maxPlaylistItems: number;
+  /** Default tracks auto-queued from a YouTube Mix/Radio before "add more". */
+  mixDefaultItems: number;
 }
+
+/** How many mix tracks to buffer up front (the queue bound limits the rest). */
+const MIX_BUFFER_MAX = 50;
 
 /** Parse a string into a URL, or null when it is not a URL at all. */
 function tryParseUrl(raw: string): URL | null {
@@ -46,7 +52,7 @@ function requireGuildId(ctx: CommandContext): string {
 }
 
 export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
-  const { manager, resolver, resolveCtx, maxPlaylistItems } = deps;
+  const { manager, resolver, resolveCtx, maxPlaylistItems, mixDefaultItems } = deps;
 
   /**
    * Expand a playlist URL and batch-enqueue it, then report what happened.
@@ -157,6 +163,72 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
     );
   }
 
+  /**
+   * Handle a YouTube Mix/Radio (`list=RD…`): play the seed video (if any), queue
+   * `mixDefaultItems` tracks, buffer the rest, and show the mix panel so the user
+   * can add more via buttons. Mix loading is best-effort.
+   */
+  async function playMix(
+    ctx: CommandContext,
+    session: GuildPlaybackSession,
+    rawUrl: string,
+    info: YouTubeUrlInfo
+  ): Promise<void> {
+    const requestedBy = ctx.user.displayName;
+
+    // 1. Play the seed video right away when the link points at one.
+    if (info.videoId) {
+      const resolved = await resolver.resolve(rawUrl, resolveCtx);
+      await session.enqueueOrPlay({
+        ...resolved,
+        metadata: { ...resolved.metadata, requestedBy },
+      });
+    }
+
+    // 2. Fetch a bounded buffer of the mix (best-effort — the seed still plays).
+    let mixTracks: ResolvedTrack[] = [];
+    let title = 'YouTube Mix';
+    try {
+      // Always fetch enough to leave a buffer beyond the default-queued count,
+      // even if an operator sets mixDefaultItems high.
+      const fetchN = Math.min(maxPlaylistItems, Math.max(MIX_BUFFER_MAX, mixDefaultItems + 15));
+      const playlist = await resolver.resolvePlaylist(rawUrl, resolveCtx, fetchN);
+      title = playlist.title ?? title;
+      mixTracks = playlist.tracks.filter(
+        (t) => !info.videoId || !t.metadata.url.includes(info.videoId!)
+      );
+      for (const t of mixTracks) {
+        t.metadata = { ...t.metadata, requestedBy };
+      }
+    } catch (error) {
+      ctx.logger.warn({ err: error }, 'could not load the YouTube mix');
+    }
+
+    // 3. Queue the default few; buffer the rest for the add-more buttons.
+    const initial = mixTracks.slice(0, mixDefaultItems);
+    const buffer = mixTracks.slice(mixDefaultItems);
+    const enq = await session.enqueueMany(initial);
+    session.setPendingMix(buffer, title);
+
+    const note =
+      enq.accepted > 0
+        ? `Queued **${enq.accepted}** track(s) from the mix.`
+        : info.videoId
+          ? 'Playing the track — no extra mix tracks were available.'
+          : 'No playable mix tracks were found.';
+
+    if (ctx.replyRich) {
+      await ctx.replyRich(
+        buildMixPanel(session.getSnapshot(), { title, note, remaining: buffer.length })
+      );
+    } else {
+      await ctx.reply(
+        `🎵 ${title}: ${note.replace(/\*\*/g, '')} ${buffer.length} more available ` +
+          '(buttons need a rich-capable client).'
+      );
+    }
+  }
+
   const join: CommandDefinition = {
     name: 'join',
     description: 'Join your current voice channel',
@@ -214,7 +286,10 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
       }
       active = await voice.join(channel.id);
     }
-    return manager.ensureSession(guildId, active);
+    const session = manager.ensureSession(guildId, active);
+    // Remember where to (re)post the now-playing panel on track changes.
+    session.setTextChannel(ctx.channelId ?? undefined);
+    return session;
   }
 
   const play: CommandDefinition = {
@@ -233,15 +308,22 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
       await ctx.defer();
       const session = await ensureActiveSession(ctx);
       if (!session) return;
+      // A fresh /play invalidates any earlier mix buffer (so old mix-panel
+      // buttons can't inject unrelated tracks). playMix re-sets it below.
+      session.clearPendingMix();
 
       const rawUrl = String(ctx.options['url'] ?? '').trim();
       const parsed = tryParseUrl(rawUrl);
       const info: YouTubeUrlInfo = parsed ? classifyYouTubeUrl(parsed) : { kind: 'not-youtube' };
+      const hasList = info.kind === 'playlist' || info.kind === 'video-in-playlist';
 
-      // A pure playlist link loads the whole list. A link that CONTAINS a
-      // playlist (watch?v=…&list=…) plays the chosen video, then loads the rest
-      // of the playlist behind it. Everything else is a single track.
-      if (info.kind === 'playlist') {
+      // A YouTube Mix/Radio (list=RD…) queues a default few + an "add more" panel.
+      // A pure playlist loads the whole list. A link that CONTAINS a playlist
+      // (watch?v=…&list=…) plays the chosen video, then loads the rest behind it.
+      // Everything else is a single track.
+      if (hasList && isMixList(info.listId)) {
+        await playMix(ctx, session, rawUrl, info);
+      } else if (info.kind === 'playlist') {
         await enqueuePlaylist(ctx, session, rawUrl);
       } else if (info.kind === 'video-in-playlist') {
         await playVideoWithPlaylist(ctx, session, rawUrl, info.videoId);
@@ -267,8 +349,8 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
       await ctx.defer();
       const rawUrl = String(ctx.options['url'] ?? '').trim();
       const parsed = tryParseUrl(rawUrl);
-      const kind = parsed ? classifyYouTubeUrl(parsed).kind : 'not-youtube';
-      if (kind === 'video' || kind === 'not-youtube') {
+      const info: YouTubeUrlInfo = parsed ? classifyYouTubeUrl(parsed) : { kind: 'not-youtube' };
+      if (info.kind === 'video' || info.kind === 'not-youtube') {
         await ctx.reply({
           content: 'That link has no playlist. Use `/play <link>` for a single track.',
           ephemeral: true,
@@ -277,7 +359,40 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
       }
       const session = await ensureActiveSession(ctx);
       if (!session) return;
-      await enqueuePlaylist(ctx, session, rawUrl);
+      session.clearPendingMix();
+      // A Mix link goes through the same default-few + add-more panel as /play.
+      if (isMixList(info.listId)) {
+        await playMix(ctx, session, rawUrl, info);
+      } else {
+        await enqueuePlaylist(ctx, session, rawUrl);
+      }
+    },
+  };
+
+  const mixCmd: CommandDefinition = {
+    name: 'mix',
+    description: 'Re-open the YouTube Mix panel to add more tracks',
+    guildOnly: true,
+    async execute(ctx) {
+      const session = manager.get(requireGuildId(ctx));
+      const remaining = session?.pendingMixCount ?? 0;
+      if (!session || remaining === 0) {
+        await ctx.reply({
+          content: 'No active mix. Play a YouTube Mix link (a `…&list=RD…` URL) with `/play` first.',
+          ephemeral: true,
+        });
+        return;
+      }
+      const state = {
+        title: session.pendingMixTitle ?? 'Mix',
+        note: `${remaining} track(s) buffered from the mix.`,
+        remaining,
+      };
+      if (ctx.replyRich) {
+        await ctx.replyRich(buildMixPanel(session.getSnapshot(), state));
+      } else {
+        await ctx.reply(`🎵 ${state.note} (a rich-capable client is needed for the buttons.)`);
+      }
     },
   };
 
@@ -421,7 +536,68 @@ export function buildAudioCommands(deps: CommandDeps): CommandDefinition[] {
     },
   };
 
-  return [join, leave, play, playlist, queue, skip, pause, resume, stop, nowplaying, controls];
+  async function applyLoop(ctx: CommandContext, mode: 'track' | 'queue' | 'off'): Promise<void> {
+    const session = manager.get(requireGuildId(ctx));
+    if (mode !== 'off' && (!session || !session.isActive)) {
+      await ctx.reply({ content: 'Nothing is playing to loop.', ephemeral: true });
+      return;
+    }
+    const timesRaw = ctx.options['times'];
+    const times =
+      typeof timesRaw === 'number' && Number.isFinite(timesRaw) && timesRaw > 0
+        ? Math.floor(timesRaw)
+        : null;
+    session?.setLoop(mode, times);
+    if (mode === 'off') {
+      await ctx.reply('🔁 Looping turned off.');
+    } else if (mode === 'track') {
+      await ctx.reply(
+        times
+          ? `🔁 Looping the current track — ${times} more time(s).`
+          : '🔁 Looping the current track — forever (use `/loop off` to stop).'
+      );
+    } else {
+      const base = times
+        ? `🔁 Looping the queue — ${times} more time(s).`
+        : '🔁 Looping the whole queue — forever (use `/loop off` to stop).';
+      await ctx.reply(
+        `${base} (Tracks added later won't repeat — re-run \`/loop queue\` to include them.)`
+      );
+    }
+  }
+
+  const timesOption = {
+    name: 'times',
+    description: 'How many repeats (leave empty for forever)',
+    type: 'integer' as const,
+    required: false,
+  };
+  const loop: CommandDefinition = {
+    name: 'loop',
+    description: 'Repeat the current track or the whole queue (a set number of times, or forever)',
+    guildOnly: true,
+    subcommands: [
+      {
+        name: 'track',
+        description: 'Repeat the current track',
+        options: [timesOption],
+        execute: (ctx) => applyLoop(ctx, 'track'),
+      },
+      {
+        name: 'queue',
+        description: 'Repeat the whole queue',
+        options: [timesOption],
+        execute: (ctx) => applyLoop(ctx, 'queue'),
+      },
+      {
+        name: 'off',
+        description: 'Turn looping off',
+        execute: (ctx) => applyLoop(ctx, 'off'),
+      },
+    ],
+  };
+
+  return [join, leave, play, playlist, mixCmd, loop, queue, skip, pause, resume, stop, nowplaying, controls];
 }
 
 /**

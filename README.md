@@ -16,8 +16,10 @@ A modular community-management suite — every feature is a module you can
 enable, disable, configure, test and audit:
 
 - 🎵 **Audio Player** — `/play` from **YouTube, SoundCloud, Spotify** or direct
-  links; queue, skip, pause/resume, stop, now-playing; SSRF-hardened, yt-dlp
-  powered ([docs](docs/AUDIO_SOURCES.md))
+  links, plus **YouTube playlists & Mixes**, **multi-hour tracks**, **online
+  radio**, **looping** (track/queue, N times or forever) and an **auto-reposted
+  now-playing panel**; queue, skip, pause/resume, stop; SSRF-hardened, yt-dlp
+  powered ([sources](docs/AUDIO_SOURCES.md) · [music guide](docs/music/README.md))
 - 📣 **Announcements** — create/schedule/send rich announcements from the panel,
   with mass-mention safety ([docs](docs/ANNOUNCEMENTS.md))
 - 🖼️ **Dynamic Cards** — generate welcome/birthday/banner images (SVG→PNG, no
@@ -38,7 +40,7 @@ enable, disable, configure, test and audit:
   limiting, RBAC foundation ([docs](docs/ADMIN_PANEL.md))
 - 🗄️ **PostgreSQL persistence** (32 tables) with SQL migrations via Drizzle
 - 🔍 **Health endpoints** + Docker healthchecks; structured logging
-- ✅ **Three test layers** — 314 unit, 37 integration, 23 Playwright e2e —
+- ✅ **Three test layers** — 500+ unit, 37 integration, Playwright e2e —
   plus a GitHub Actions pipeline that runs the identical Docker workflow
 
 ## Quick start (Windows, macOS or Linux — only Docker required)
@@ -73,7 +75,7 @@ first run.
 
 | Module | Commands |
 |--------|----------|
-| Audio | `/join` `/leave` `/play url:<link>` `/queue` `/skip` `/pause` `/resume` `/stop` `/nowplaying` |
+| Audio | `/play url:<link>` `/playlist url:<link>` `/mix` `/radio list\|play\|stop\|nowplaying` `/loop track\|queue\|off` `/queue` `/skip` `/pause` `/resume` `/stop` `/nowplaying` `/controls` `/join` `/leave` |
 | Announcements | `/announcement preview\|send\|list\|cancel` |
 | Reaction Roles | `/roles menu\|list\|refresh\|remove` |
 | Birthdays | `/birthday set\|view\|remove\|upcoming` |
@@ -86,11 +88,15 @@ Register them after configuring Discord with
 Cards, Scheduled Messages and Auto-Moderation are event/scheduler-driven and
 configured entirely from the admin panel.
 
-Audio sources: **YouTube**, **SoundCloud**, **Spotify** (single tracks →
-best audio match) and **direct HTTP(S) audio files**, powered by `yt-dlp`
-bundled in the Docker images. Private/internal addresses are blocked; an
+Audio sources: **YouTube** (videos, **playlists** and auto-generated **Mixes**),
+**SoundCloud**, **Spotify** (single tracks → best audio match), **online radio**
+stations and **direct HTTP(S) audio files**, powered by `yt-dlp` bundled in the
+Docker images. Multi-hour tracks are supported (`MAX_TRACK_DURATION_SECONDS=0`),
+playlists are capped by `MAX_PLAYLIST_ITEMS`, and a Mix queues `MIX_DEFAULT_ITEMS`
+with an "add more" button panel. Private/internal addresses are blocked; an
 optional allowlist is available via `ALLOWED_AUDIO_DOMAINS`. See
-[docs/AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md).
+[docs/AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md) and the
+[music guide](docs/music/README.md).
 
 ## Architecture (short version)
 
@@ -135,7 +141,7 @@ Copy `.env.example` → `.env`. Key variables:
 | `SESSION_SECRET` | ≥32 random chars — encrypts admin session cookies |
 | `INTERNAL_API_TOKEN` | Shared secret between admin panel and bot worker |
 | `ADMIN_PORT`, `PUBLIC_ADMIN_URL`, `HEALTH_PORT` | Ports/URLs |
-| `ALLOWED_AUDIO_DOMAINS`, `MAX_QUEUE_SIZE`, `MAX_TRACK_DURATION_SECONDS`, `AUDIO_REQUEST_TIMEOUT_MS` | Audio limits |
+| `ALLOWED_AUDIO_DOMAINS`, `MAX_QUEUE_SIZE`, `MAX_PLAYLIST_ITEMS`, `MIX_DEFAULT_ITEMS`, `MAX_TRACK_DURATION_SECONDS` (0 = unlimited), `AUDIO_REQUEST_TIMEOUT_MS` | Audio limits |
 
 Never commit `.env` — it is gitignored; CI scans for leaked secrets.
 
@@ -193,4 +199,5 @@ and [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
 | [BIRTHDAYS_AND_REMINDERS](docs/BIRTHDAYS_AND_REMINDERS.md) · [SCHEDULED_MESSAGES](docs/SCHEDULED_MESSAGES.md) | Per-module guides |
 | [MODERATION](docs/MODERATION.md) · [AUTOMOD](docs/AUTOMOD.md) · [CUSTOM_COMMANDS](docs/CUSTOM_COMMANDS.md) | Per-module guides |
 | [AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md) | YouTube/SoundCloud/Spotify + direct links |
+| [music/](docs/music/README.md) | Music system: playlists, long tracks, online radio, Mixes, looping, the now-playing panel, commands, testing & troubleshooting |
 | [PRIVACY.md](docs/PRIVACY.md) · [PERMISSIONS.md](docs/PERMISSIONS.md) | Data handling + permission model |

@@ -35,6 +35,14 @@ export class PlaybackQueue {
     return this.items.shift();
   }
 
+  /** Remove up to `n` tracks from the END of the queue; returns how many. */
+  removeTail(n: number): number {
+    if (n <= 0) return 0;
+    const remove = Math.min(Math.floor(n), this.items.length);
+    this.items.splice(this.items.length - remove, remove);
+    return remove;
+  }
+
   peekAll(): readonly ResolvedTrack[] {
     return this.items;
   }

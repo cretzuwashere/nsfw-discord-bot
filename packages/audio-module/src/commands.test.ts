@@ -27,6 +27,7 @@ function makeHarness(): Harness {
     resolver,
     resolveCtx: { allowedDomains: [], timeoutMs: 5000, logger: createSilentLogger() },
     maxPlaylistItems: 100,
+    mixDefaultItems: 10,
   });
   return {
     commands: new Map(list.map((command) => [command.name, command])),
@@ -40,7 +41,7 @@ function makeHarness(): Harness {
 function makeCtx(
   harness: Harness,
   commandName: string,
-  options: Record<string, string> = {},
+  options: Record<string, string | number | boolean> = {},
   overrides: Partial<CommandContext> = {}
 ) {
   const replies: Array<{ content: string; ephemeral: boolean }> = [];
@@ -87,7 +88,11 @@ function execOf(harness: Harness, name: string): NonNullable<CommandDefinition['
   return command.execute;
 }
 
-async function run(harness: Harness, name: string, options: Record<string, string> = {}) {
+async function run(
+  harness: Harness,
+  name: string,
+  options: Record<string, string | number | boolean> = {}
+) {
   const ctx = makeCtx(harness, name, options);
   await execOf(harness, name)(ctx);
   return ctx;
@@ -102,7 +107,7 @@ describe('command registration', () => {
   it('exposes all audio commands, all guild-only', () => {
     const names = [...harness.commands.keys()].sort();
     expect(names).toEqual(
-      ['controls', 'join', 'leave', 'nowplaying', 'pause', 'play', 'playlist', 'queue', 'resume', 'skip', 'stop'].sort()
+      ['controls', 'join', 'leave', 'loop', 'mix', 'nowplaying', 'pause', 'play', 'playlist', 'queue', 'resume', 'skip', 'stop'].sort()
     );
     for (const command of harness.commands.values()) {
       expect(command.guildOnly).toBe(true);
@@ -273,6 +278,126 @@ describe('/play + /playlist (YouTube playlists)', () => {
       url: 'https://www.youtube.com/playlist?list=PLempty',
     });
     expect(ctx.replies[0]?.content).toMatch(/empty/i);
+  });
+});
+
+describe('/play YouTube Mix (list=RD…)', () => {
+  it('plays the seed, buffers the mix, and shows the mix panel with add/clear buttons', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => fakeTrack(`m${i}`));
+    harness.resolvePlaylist.mockResolvedValue({
+      tracks: many,
+      total: 30,
+      skipped: 0,
+      title: 'Mix - Test',
+    });
+    const ctx = await run(harness, 'play', {
+      url: 'https://www.youtube.com/watch?v=SEED1234567&list=RDSEED1234567',
+    });
+    expect(harness.resolve).toHaveBeenCalledOnce(); // seed video
+    expect(harness.resolvePlaylist).toHaveBeenCalledOnce(); // mix buffer
+    const panel = ctx.richReplies[0];
+    expect(panel?.embed?.title).toMatch(/Mix/i);
+    expect(panel?.buttons?.some((b) => b.customId?.startsWith('mix:add'))).toBe(true);
+    expect(panel?.buttons?.some((b) => b.customId === 'mix:clear')).toBe(true);
+    // 30 fetched − 10 default queued = 20 buffered for the buttons.
+    expect(harness.manager.get('guild-1')!.pendingMixCount).toBe(20);
+  });
+
+  it('still works when the mix lookup fails (seed plays, no buffer)', async () => {
+    harness.resolvePlaylist.mockRejectedValue(new Error('yt-dlp down'));
+    const ctx = await run(harness, 'play', {
+      url: 'https://www.youtube.com/watch?v=SEED1234567&list=RDSEED1234567',
+    });
+    expect(harness.resolve).toHaveBeenCalledOnce();
+    expect(harness.manager.get('guild-1')!.pendingMixCount).toBe(0);
+    expect(ctx.richReplies[0]?.embed?.title).toMatch(/Mix/i);
+  });
+
+  it('/playlist on an RD mix uses the mix panel (not a bulk enqueue)', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => fakeTrack(`m${i}`));
+    harness.resolvePlaylist.mockResolvedValue({ tracks: many, total: 30, skipped: 0, title: 'Mix' });
+    const ctx = await run(harness, 'playlist', {
+      url: 'https://www.youtube.com/playlist?list=RDSEED1234567',
+    });
+    expect(ctx.richReplies[0]?.embed?.title).toMatch(/Mix/i);
+    expect(ctx.richReplies[0]?.buttons?.some((b) => b.customId?.startsWith('mix:add'))).toBe(true);
+    expect(harness.manager.get('guild-1')!.pendingMixCount).toBeGreaterThan(0);
+  });
+
+  it('a fresh /play clears a prior mix buffer (before any queueing)', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => fakeTrack(`m${i}`));
+    harness.resolvePlaylist.mockResolvedValue({ tracks: many, total: 30, skipped: 0, title: 'Mix' });
+    await run(harness, 'play', { url: 'https://www.youtube.com/watch?v=SEED1234567&list=RDSEED1234567' });
+    expect(harness.manager.get('guild-1')!.pendingMixCount).toBeGreaterThan(0);
+    // The buffer is invalidated at the top of /play; the tiny test queue may
+    // then reject the new track (QUEUE_FULL) — that's fine, the clear already ran.
+    const ctx = makeCtx(harness, 'play', { url: 'https://example.com/song.mp3' });
+    await execOf(harness, 'play')(ctx).catch(() => undefined);
+    expect(harness.manager.get('guild-1')!.pendingMixCount).toBe(0);
+  });
+});
+
+describe('/mix re-summon', () => {
+  it('reports when there is no active mix', async () => {
+    const ctx = await run(harness, 'mix');
+    expect(ctx.replies[0]).toMatchObject({ ephemeral: true });
+    expect(ctx.replies[0]?.content).toMatch(/No active mix/i);
+  });
+
+  it('re-renders the panel from buffered mix state', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => fakeTrack(`m${i}`));
+    harness.resolvePlaylist.mockResolvedValue({ tracks: many, total: 30, skipped: 0, title: 'Mix - Test' });
+    await run(harness, 'play', { url: 'https://www.youtube.com/watch?v=SEED1234567&list=RDSEED1234567' });
+    const ctx = await run(harness, 'mix');
+    expect(ctx.richReplies[0]?.embed?.title).toMatch(/Mix/i);
+    expect(ctx.richReplies[0]?.buttons?.some((b) => b.customId?.startsWith('mix:add'))).toBe(true);
+  });
+});
+
+describe('/loop', () => {
+  function loopSub(name: string): NonNullable<CommandDefinition['execute']> {
+    const command = harness.commands.get('loop');
+    const sub = command?.subcommands?.find((s) => s.name === name);
+    if (!sub) throw new Error(`loop subcommand ${name} not found`);
+    return sub.execute;
+  }
+
+  it('exposes track/queue/off subcommands, guild-only', () => {
+    const loop = harness.commands.get('loop');
+    expect(loop?.guildOnly).toBe(true);
+    expect(loop?.subcommands?.map((s) => s.name).sort()).toEqual(['off', 'queue', 'track']);
+  });
+
+  it('refuses to loop when nothing is playing', async () => {
+    const ctx = makeCtx(harness, 'loop');
+    await loopSub('track')(ctx);
+    expect(ctx.replies[0]).toMatchObject({ ephemeral: true });
+    expect(ctx.replies[0]?.content).toMatch(/nothing is playing/i);
+  });
+
+  it('enables track loop with a repeat count', async () => {
+    await run(harness, 'play', { url: 'https://example.com/a.mp3' });
+    const ctx = makeCtx(harness, 'loop', { times: 3 });
+    await loopSub('track')(ctx);
+    expect(ctx.replies[0]?.content).toMatch(/Looping the current track — 3 more/i);
+    expect(harness.manager.get('guild-1')!.getLoop()).toEqual({ mode: 'track', remaining: 3 });
+  });
+
+  it('enables an infinite queue loop when no count is given', async () => {
+    await run(harness, 'play', { url: 'https://example.com/a.mp3' });
+    const ctx = makeCtx(harness, 'loop');
+    await loopSub('queue')(ctx);
+    expect(ctx.replies[0]?.content).toMatch(/forever/i);
+    expect(harness.manager.get('guild-1')!.getLoop()).toEqual({ mode: 'queue', remaining: null });
+  });
+
+  it('turns looping off', async () => {
+    await run(harness, 'play', { url: 'https://example.com/a.mp3' });
+    harness.manager.get('guild-1')!.setLoop('track', null);
+    const ctx = makeCtx(harness, 'loop');
+    await loopSub('off')(ctx);
+    expect(ctx.replies[0]?.content).toMatch(/turned off/i);
+    expect(harness.manager.get('guild-1')!.getLoop().mode).toBe('off');
   });
 });
 

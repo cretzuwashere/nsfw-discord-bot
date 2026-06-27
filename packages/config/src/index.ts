@@ -45,6 +45,10 @@ const envSchema = z.object({
   MAX_QUEUE_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
   /** Max number of items pulled from a single YouTube playlist. */
   MAX_PLAYLIST_ITEMS: z.coerce.number().int().min(1).max(1000).default(100),
+  /** Default tracks auto-queued from a YouTube Mix/Radio (list=RD…) before the
+   * user opts to add more via buttons. Capped at 50 to stay within the mix
+   * fetch buffer so the "add more" buttons always have material. */
+  MIX_DEFAULT_ITEMS: z.coerce.number().int().min(1).max(50).default(10),
   /** Per-track duration cap in seconds. 0 = unlimited (allow multi-hour tracks). */
   MAX_TRACK_DURATION_SECONDS: z.coerce.number().int().min(0).default(3600),
   AUDIO_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).default(15000),
@@ -109,6 +113,8 @@ export interface AppConfig {
     maxQueueSize: number;
     /** Max items pulled from a single YouTube playlist. */
     maxPlaylistItems: number;
+    /** Default tracks auto-queued from a YouTube Mix/Radio before "add more". */
+    mixDefaultItems: number;
     /** Per-track duration cap in seconds; 0 = unlimited. */
     maxTrackDurationSeconds: number;
     requestTimeoutMs: number;
@@ -169,6 +175,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       allowedDomains: parseCsvList(e.ALLOWED_AUDIO_DOMAINS),
       maxQueueSize: e.MAX_QUEUE_SIZE,
       maxPlaylistItems: e.MAX_PLAYLIST_ITEMS,
+      mixDefaultItems: e.MIX_DEFAULT_ITEMS,
       maxTrackDurationSeconds: e.MAX_TRACK_DURATION_SECONDS,
       requestTimeoutMs: e.AUDIO_REQUEST_TIMEOUT_MS,
       enableStreamingSources: e.AUDIO_ENABLE_STREAMING_SOURCES,

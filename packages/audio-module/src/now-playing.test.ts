@@ -61,6 +61,22 @@ describe('buildNowPlayingPanel', () => {
     expect(panel.embed?.fields?.some((f) => /Up next/.test(f.name))).toBe(true);
   });
 
+  it('shows a loop indicator when looping', () => {
+    const base: QueueSnapshot = {
+      guildId: 'g',
+      status: 'playing',
+      nowPlaying: { title: 'Song', url: 'u', provider: 'youtube' },
+      queue: [],
+      maxQueueSize: 50,
+    };
+    expect(buildNowPlayingPanel(base).embed?.fields?.some((f) => f.name === 'Loop')).toBe(false);
+    const looping = buildNowPlayingPanel({ ...base, loop: { mode: 'queue', remaining: null } });
+    const loopField = looping.embed?.fields?.find((f) => f.name === 'Loop');
+    expect(loopField?.value).toMatch(/Queue · forever/i);
+    const counted = buildNowPlayingPanel({ ...base, loop: { mode: 'track', remaining: 3 } });
+    expect(counted.embed?.fields?.find((f) => f.name === 'Loop')?.value).toMatch(/Track · 3 left/i);
+  });
+
   it('shows a resume control when paused', () => {
     const panel = buildNowPlayingPanel({
       guildId: 'g',

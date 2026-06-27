@@ -4,13 +4,18 @@ The audio player resolves links through a **provider layer** — command
 handlers never contain extraction logic, and new sources are added without
 touching them.
 
+> This page covers the **source/provider layer**. For playlists, YouTube
+> **Mixes**, **online radio**, **multi-hour tracks**, **looping** and the
+> now-playing panel, see the **[music guide](music/README.md)**.
+
 ## Supported sources
 
 | Source | How it works | Notes |
 |--------|--------------|-------|
-| **YouTube** (`youtube.com`, `youtu.be`, `music.youtube.com`) | `yt-dlp` extracts metadata (`-J`) and streams best audio to ffmpeg | Single videos; live streams rejected |
+| **YouTube** (`youtube.com`, `youtu.be`, `music.youtube.com`) | `yt-dlp` extracts metadata (`-J`) and streams best audio to ffmpeg | Videos, **playlists** and auto **Mixes** (`list=RD…`); live streams rejected |
 | **SoundCloud** (`soundcloud.com`) | same `yt-dlp` path | Public tracks |
 | **Spotify** (`open.spotify.com/track/…`) | reads the public title via Spotify **oEmbed**, then plays the best **YouTube** match | Single tracks only (no DRM audio); albums/playlists out of scope |
+| **Online radio** | curated stations streamed via the SSRF-safe opener | See [music/online-radio.md](music/online-radio.md) |
 | **Direct files** (`https://…/song.mp3`) | SSRF-safe streaming fetch (undici) → ffmpeg | mp3/ogg/wav/m4a/…; private/internal hosts blocked |
 
 Provider order: platform resolvers claim their hosts first; the direct-HTTP

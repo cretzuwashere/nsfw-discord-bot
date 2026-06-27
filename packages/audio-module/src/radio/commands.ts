@@ -58,7 +58,9 @@ async function ensureSession(
     }
     active = await voice.join(channel.id);
   }
-  return manager.ensureSession(guildId, active);
+  const session = manager.ensureSession(guildId, active);
+  session.setTextChannel(ctx.channelId ?? undefined);
+  return session;
 }
 
 /** Take over playback with a station (stops whatever was playing). */

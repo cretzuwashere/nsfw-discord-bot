@@ -208,6 +208,196 @@ describe('GuildPlaybackSession', () => {
     });
   });
 
+  describe('pending mix buffer', () => {
+    it('moves up to n tracks into the queue and tracks the remainder', async () => {
+      const { session } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('seed'));
+      session.setPendingMix([fakeTrack('a'), fakeTrack('b'), fakeTrack('c')], 'Mix');
+      expect(session.pendingMixCount).toBe(3);
+
+      expect(session.addFromPendingMix(2)).toEqual({ added: 2, remaining: 1 });
+      expect(session.getSnapshot().queue.map((t) => t.title)).toEqual(['a', 'b']);
+
+      expect(session.addFromPendingMix(10)).toEqual({ added: 1, remaining: 0 });
+      expect(session.pendingMixCount).toBe(0);
+    });
+
+    it('only removes from the buffer what the bounded queue accepted', async () => {
+      const { session } = makeSession({
+        limits: { maxQueueSize: 1, maxTrackDurationSeconds: 3600 },
+      });
+      await session.enqueueOrPlay(fakeTrack('seed'));
+      session.setPendingMix([fakeTrack('a'), fakeTrack('b'), fakeTrack('c')], 'Mix');
+      const result = session.addFromPendingMix(3); // queue holds only 1
+      expect(result.added).toBe(1);
+      expect(session.pendingMixCount).toBe(2);
+    });
+
+    it('stop() clears the pending mix', async () => {
+      const { session } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('seed'));
+      session.setPendingMix([fakeTrack('a')], 'Mix');
+      session.stop();
+      expect(session.pendingMixCount).toBe(0);
+    });
+  });
+
+  describe('loop', () => {
+    it('track loop replays the same track N times then advances', async () => {
+      const { session, voice } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      await session.enqueueOrPlay(fakeTrack('B'));
+      session.setLoop('track', 2);
+
+      voice.emitFinished();
+      await vi.waitFor(() => expect(voice.playCalls).toHaveLength(2));
+      expect(session.getSnapshot().nowPlaying?.title).toBe('A');
+
+      voice.emitFinished();
+      await vi.waitFor(() => expect(voice.playCalls).toHaveLength(3));
+      expect(session.getSnapshot().nowPlaying?.title).toBe('A');
+
+      voice.emitFinished();
+      await vi.waitFor(() => expect(session.getSnapshot().nowPlaying?.title).toBe('B'));
+      expect(session.getLoop().mode).toBe('off');
+    });
+
+    it('track loop forever keeps replaying the same track', async () => {
+      const { session, voice } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      session.setLoop('track', null);
+      for (let i = 0; i < 4; i++) {
+        voice.emitFinished();
+        await vi.waitFor(() => expect(voice.playCalls).toHaveLength(i + 2));
+      }
+      expect(session.getSnapshot().nowPlaying?.title).toBe('A');
+      expect(session.getLoop()).toEqual({ mode: 'track', remaining: null });
+    });
+
+    it('queue loop repeats the captured queue N times then stops', async () => {
+      const { session, voice } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      await session.enqueueOrPlay(fakeTrack('B'));
+      session.setLoop('queue', 1);
+
+      voice.emitFinished(); // A → B
+      await vi.waitFor(() => expect(session.getSnapshot().nowPlaying?.title).toBe('B'));
+      voice.emitFinished(); // queue empty → refill → A (last pass)
+      await vi.waitFor(() => expect(session.getSnapshot().nowPlaying?.title).toBe('A'));
+      voice.emitFinished(); // A → B
+      await vi.waitFor(() => expect(session.getSnapshot().nowPlaying?.title).toBe('B'));
+      voice.emitFinished(); // queue empty, no passes left → stop
+      await vi.waitFor(() => expect(session.isActive).toBe(false));
+    });
+
+    it('queue loop forever cycles indefinitely', async () => {
+      const { session, voice } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      await session.enqueueOrPlay(fakeTrack('B'));
+      session.setLoop('queue', null);
+      const seen: Array<string | undefined> = [];
+      for (let i = 0; i < 5; i++) {
+        seen.push(session.getSnapshot().nowPlaying?.title);
+        voice.emitFinished();
+        await vi.waitFor(() => expect(session.isActive).toBe(true));
+      }
+      expect(seen).toEqual(['A', 'B', 'A', 'B', 'A']);
+    });
+
+    it('stop and clearQueue reset looping; snapshot exposes loop state', async () => {
+      const { session } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      expect(session.getSnapshot().loop).toBeUndefined();
+      session.setLoop('queue', 3);
+      expect(session.getSnapshot().loop).toEqual({ mode: 'queue', remaining: 3 });
+      session.clearQueue();
+      expect(session.getLoop().mode).toBe('off');
+      session.setLoop('track', null);
+      session.stop();
+      expect(session.getLoop().mode).toBe('off');
+    });
+
+    it('skip ends a track loop instead of transferring it to the next track', async () => {
+      const { session, voice } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      await session.enqueueOrPlay(fakeTrack('B'));
+      session.setLoop('track', null);
+      await session.skip();
+      expect(session.getSnapshot().nowPlaying?.title).toBe('B');
+      expect(session.getLoop().mode).toBe('off');
+      voice.emitFinished(); // B must NOT be replayed
+      await vi.waitFor(() => expect(session.isActive).toBe(false));
+    });
+
+    it('drops stale loop state when reconnecting after a destroyed connection', async () => {
+      const { session, voice } = makeSession();
+      await session.enqueueOrPlay(fakeTrack('A'));
+      session.setLoop('queue', null);
+      voice.destroyed = true; // simulate an external disconnect
+      session.attachVoice(new FakeVoiceSession());
+      expect(session.getLoop().mode).toBe('off');
+    });
+  });
+
+  describe('now-playing announce', () => {
+    it('announces on track changes but not the initial play', async () => {
+      const voice = new FakeVoiceSession();
+      const announced: Array<string | undefined> = [];
+      const session = new GuildPlaybackSession('guild-1', voice, LIMITS, null, createSilentLogger(), (
+        _channelId,
+        snap
+      ) => announced.push(snap.nowPlaying?.title));
+      session.setTextChannel('text-1');
+      await session.enqueueOrPlay(fakeTrack('A'));
+      await session.enqueueOrPlay(fakeTrack('B'));
+      expect(announced).toEqual([]); // initial play replies itself
+      voice.emitFinished();
+      await vi.waitFor(() => expect(announced).toEqual(['B']));
+    });
+
+    it('does not announce when no text channel is set', async () => {
+      const voice = new FakeVoiceSession();
+      const announced: unknown[] = [];
+      const session = new GuildPlaybackSession('guild-1', voice, LIMITS, null, createSilentLogger(), (
+        _c,
+        s
+      ) => announced.push(s));
+      await session.enqueueOrPlay(fakeTrack('A'));
+      await session.enqueueOrPlay(fakeTrack('B'));
+      voice.emitFinished();
+      await vi.waitFor(() => expect(session.getSnapshot().nowPlaying?.title).toBe('B'));
+      expect(announced).toEqual([]);
+    });
+
+    it('does not re-announce on a track-loop replay (same track)', async () => {
+      const voice = new FakeVoiceSession();
+      const announced: Array<string | undefined> = [];
+      const session = new GuildPlaybackSession('guild-1', voice, LIMITS, null, createSilentLogger(), (
+        _c,
+        s
+      ) => announced.push(s.nowPlaying?.title));
+      session.setTextChannel('text-1');
+      await session.enqueueOrPlay(fakeTrack('A'));
+      session.setLoop('track', null);
+      voice.emitFinished();
+      await vi.waitFor(() => expect(voice.playCalls).toHaveLength(2));
+      expect(announced).toEqual([]);
+    });
+
+    it('refreshes the panel to idle on stop', async () => {
+      const voice = new FakeVoiceSession();
+      const announced: Array<unknown> = [];
+      const session = new GuildPlaybackSession('guild-1', voice, LIMITS, null, createSilentLogger(), (
+        _c,
+        s
+      ) => announced.push(s.nowPlaying));
+      session.setTextChannel('text-1');
+      await session.enqueueOrPlay(fakeTrack('A'));
+      session.stop();
+      expect(announced).toEqual([null]);
+    });
+  });
+
   it('snapshot reflects live state', async () => {
     const { session } = makeSession();
     await session.enqueueOrPlay(fakeTrack('current'));

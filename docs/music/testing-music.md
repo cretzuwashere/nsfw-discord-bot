@@ -69,7 +69,12 @@ and the radio takeover — all deterministically and offline.
 **Covered by the automated unit/integration suite:**
 
 - URL classification (`youtube-url.test.ts`) — video vs. playlist vs.
-  video-in-playlist vs. auto-mix.
+  video-in-playlist vs. Mix (`RD…`) vs. album (`OLAK…`).
+- `resolvePlaylist` forwards the cap to yt-dlp as `--playlist-end`
+  (`ytdlp-provider.test.ts`) so endless Mixes stay bounded.
+- Mix detection `isMixList` (`youtube-url.test.ts`), the mix buffer
+  (`session.test.ts` — add/cap/clear), and the mix panel + buttons + component
+  handler (`mix-panel.test.ts`), plus the `/play` mix path (`commands.test.ts`).
 - Single-track and playlist resolution, duration reject, `0 = unlimited`
   (`ytdlp-provider.test.ts`, `spotify-provider.test.ts`, `resolver.test.ts`).
 - Queue bound, FIFO, enqueueMany overflow (`queue.test.ts`).
@@ -110,6 +115,11 @@ Run these in a real server after a deploy:
    chosen video and then loads the rest of the playlist behind it (check
    `/queue`). `/playlist <watch?v=…&list=…>` loads the whole list from the top
    instead.
+3b. **YouTube Mix/Radio (`list=RD…`)** — `/play <watch?v=ID&list=RDID>` plays the
+   seed, queues `MIX_DEFAULT_ITEMS` (default 10), and posts the **mix panel**.
+   Click `+10` / `Add all` to queue more, `🗑️ Clear queue` for fewer; confirm the
+   queue grows/shrinks. (Verified end-to-end: the seed link fetched 50, filtered
+   the seed → queued 10, buffered 39.)
 4. **Long track with `MAX_TRACK_DURATION_SECONDS=0`** — a multi-hour link plays
    without a "too long" reject and is not force-skipped.
 5. **`/radio list` → select** — the embed + dropdown appear; selecting a station

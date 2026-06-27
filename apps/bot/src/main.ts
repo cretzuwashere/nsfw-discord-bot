@@ -52,6 +52,7 @@ async function main(): Promise<void> {
     config,
     logger,
     playback: createPlaybackRepo(database.db),
+    guildServiceProvider: adapter,
   });
   const moderationHandle = createModerationModule({
     config,

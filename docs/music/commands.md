@@ -65,8 +65,12 @@ Common preconditions:
     (the chosen video is de-duplicated). Loading the rest is best-effort — if it
     fails, the chosen video still plays. Use `/playlist` to load the whole list
     **from the top** instead.
-  - A `list=RD…` auto-mix is treated as a **single** video (auto-mixes are
-    endless and per-viewer; `youtube-url.ts`).
+  - A `list=RD…` **Mix/Radio** plays the seed, queues `MIX_DEFAULT_ITEMS`
+    (default **10**) tracks, and posts a **mix panel** with buttons (`+5/+10/+25`,
+    `Add all`, `Clear queue`) to add more on demand — see
+    [youtube-playlists.md](youtube-playlists.md#mix-panel--buttons). Extraction is
+    bounded by `--playlist-end` so an endless Mix stays in check
+    (`youtube-url.ts` `isMixList`, `mix-panel.ts`).
   - See [youtube-playlists.md](youtube-playlists.md) for the full link table.
 - **Search by text is NOT supported**: a non-URL fails URL validation and
   returns the existing "not a valid link" error. There is no `ytsearch` from a
@@ -104,8 +108,19 @@ Common preconditions:
   - Empty playlist / all items unavailable → "That playlist is empty (or its
     items are all unavailable)." or "No playable tracks were found (N
     unavailable)."
-- Source: `commands.ts:200-228` (handler) + `commands.ts:56-88` (shared
-  `enqueuePlaylist`). See [youtube-playlists.md](youtube-playlists.md).
+  - A **Mix/Radio** link (`list=RD…`) takes the mix-panel path (default few +
+    buttons), same as `/play` — see [youtube-playlists.md](youtube-playlists.md#mix-panel--buttons).
+- Source: the `playlist` command in `commands.ts` + shared `enqueuePlaylist`.
+  See [youtube-playlists.md](youtube-playlists.md).
+
+### `/mix`
+- **Description**: "Re-open the YouTube Mix panel to add more tracks".
+- **Behavior**: re-renders the mix panel from the guild's buffered mix state
+  (`session.pendingMix`) so you can keep adding after the original message scrolls
+  away. Replies ephemerally with "No active mix…" when nothing is buffered.
+- The panel's buttons (`mix:add:*`, `mix:remove:5`, `mix:clear`) are handled by
+  `buildMixComponentHandler` (`mix-panel.ts`). See
+  [youtube-playlists.md](youtube-playlists.md#mix-panel--buttons).
 
 ### `/queue`
 - **Description**: "Show the current queue".
@@ -162,7 +177,21 @@ Common preconditions:
 - **Options**: none.
 - **Behavior**: renders the now-playing panel (idle-safe — shows an idle panel
   if nothing is playing). Plain-text fallback lists the control commands.
-- Source: `commands.ts:354-368`.
+- **Auto-repost**: this same panel is re-posted automatically on every track
+  change (the previous one is deleted). See
+  [looping-and-now-playing.md](looping-and-now-playing.md#auto-reposted-now-playing-panel).
+- Source: `commands.ts` `controls`.
+
+### `/loop track|queue|off`
+- **Description**: "Repeat the current track or the whole queue (a set number of
+  times, or forever)".
+- **Subcommands**: `track [times]`, `queue [times]`, `off`. `times` is an
+  optional integer (omit = **forever**).
+- **Behavior**: `track` repeats the current song; `queue` repeats the captured
+  queue; `off` stops. Ephemeral "Nothing is playing to loop." when idle. The
+  active loop shows as a 🔁 field on the now-playing panel. Full details in
+  [looping-and-now-playing.md](looping-and-now-playing.md#looping--loop).
+- Source: `commands.ts` `loop` / `applyLoop`; `engine/session.ts` loop state.
 
 ### `/radio …`
 

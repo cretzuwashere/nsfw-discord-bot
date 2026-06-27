@@ -175,6 +175,17 @@ describe('YtDlpAudioProvider.resolvePlaylist', () => {
     expect(result.total).toBe(0);
     expect(result.tracks).toHaveLength(0);
   });
+
+  it('forwards the limit to flatPlaylist (→ yt-dlp --playlist-end) to bound endless mixes', async () => {
+    runner.flatPlaylist = vi.fn(async () => ({ entries: [{ id: 'a', title: 'A' }] }));
+    const provider = new YtDlpAudioProvider(runner, { maxTrackDurationSeconds: 3600 });
+    await provider.resolvePlaylist('https://youtube.com/watch?v=x&list=RDx', ctx, 25);
+    expect(runner.flatPlaylist).toHaveBeenCalledWith(
+      'https://youtube.com/watch?v=x&list=RDx',
+      ctx.timeoutMs,
+      25
+    );
+  });
 });
 
 describe('SpotifyAudioProvider.canResolve', () => {

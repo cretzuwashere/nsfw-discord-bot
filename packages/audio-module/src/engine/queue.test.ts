@@ -20,6 +20,16 @@ describe('PlaybackQueue', () => {
     expect(queue.size).toBe(2);
   });
 
+  it('removeTail drops up to n tracks from the end', () => {
+    const queue = new PlaybackQueue(10);
+    ['a', 'b', 'c', 'd'].forEach((t) => queue.enqueue(fakeTrack(t)));
+    expect(queue.removeTail(2)).toBe(2);
+    expect(queue.peekAll().map((i) => i.metadata.title)).toEqual(['a', 'b']);
+    expect(queue.removeTail(5)).toBe(2); // only 2 remain
+    expect(queue.size).toBe(0);
+    expect(queue.removeTail(3)).toBe(0);
+  });
+
   it('clear() empties and reports the removed count', () => {
     const queue = new PlaybackQueue(5);
     queue.enqueue(fakeTrack('a'));
